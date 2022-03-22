@@ -92,6 +92,26 @@ public class SPIRVBinary {
             return binaryOperation;
         }
 
+        private SPIRVId genTypeConversionIfNeeded(SPIRVAssembler asm, SPIRVKind spirvKind, SPIRVKind convertionKind, SPIRVId instructionToConvert) {
+            if (convertionKind != null && convertionKind != spirvKind) {
+                SPIRVId resultConversion = asm.module.getNextId();
+                SPIRVId idConversionType = asm.primitives.getTypePrimitive(convertionKind);
+                asm.currentBlockScope().add(new SPIRVOpSConvert(idConversionType, resultConversion, instructionToConvert));
+                return resultConversion;
+            }
+            return instructionToConvert;
+        }
+
+        private SPIRVId getParameterWithTypeConversionIfNeeded(SPIRVAssembler asm, SPIRVKind spirvKind, SPIRVKind conversionKind, SPIRVId instructionToConvert) {
+            if (conversionKind != null && conversionKind != spirvKind) {
+                SPIRVId resultConversion = asm.module.getNextId();
+                SPIRVId idConversionType = asm.primitives.getTypePrimitive(conversionKind);
+                asm.currentBlockScope().add(new SPIRVOpUConvert(idConversionType, resultConversion, instructionToConvert));
+                return resultConversion;
+            }
+            return instructionToConvert;
+        }
+
         protected SPIRVId getId(Value inputValue, SPIRVAssembler asm, SPIRVKind spirvKind, SPIRVKind convertionKind) {
             if (inputValue instanceof ConstantValue) {
                 SPIRVKind kind = (SPIRVKind) inputValue.getPlatformKind();
@@ -103,7 +123,12 @@ public class SPIRVBinary {
                 }
 
                 if (TornadoOptions.OPTIMIZE_LOAD_STORE_SPIRV) {
-                    return param;
+                    // If the operand value corresponds to a PHI value, then we do not need to do
+                    // any conversion, just obtain the phi value from the table and return it.
+                    if (asm.isPhiAcrossBlocksPresent((AllocatableValue) inputValue)) {
+                        return asm.getPhiIdAcrossBlock((AllocatableValue) inputValue);
+                    }
+                    return getParameterWithTypeConversionIfNeeded(asm, spirvKind, convertionKind, param);
                 }
 
                 // We need to perform a load first
@@ -121,14 +146,7 @@ public class SPIRVBinary {
                                         new SPIRVLiteralInteger(spirvKind.getByteCount())))//
                 ));
 
-                if (convertionKind != null && convertionKind != spirvKind) {
-                    SPIRVId resultConversion = asm.module.getNextId();
-                    SPIRVId idConversionType = asm.primitives.getTypePrimitive(convertionKind);
-                    asm.currentBlockScope().add(new SPIRVOpSConvert(idConversionType, resultConversion, load));
-                    load = resultConversion;
-                }
-
-                return load;
+                return genTypeConversionIfNeeded(asm, spirvKind, convertionKind, load);
             }
         }
 
@@ -457,7 +475,7 @@ public class SPIRVBinary {
 
         @Override
         public void emit(SPIRVCompilationResultBuilder crb, SPIRVAssembler asm) {
-            Logger.traceCodeGen(Logger.BACKEND.SPIRV, "emit IntegerTestNode: (" + x + " &  " + y + ")  ==   0");
+            Logger.traceCodeGen(Logger.BACKEND.SPIRV, "emit IntegerTestNode: (" + x + " & " + y + ") ==  0");
 
             LIRKind lirKind = getLIRKind();
             SPIRVKind spirvKind = (SPIRVKind) lirKind.getPlatformKind();
@@ -491,6 +509,48 @@ public class SPIRVBinary {
             asm.currentBlockScope().add(new SPIRVOpIEqual(booleanType, compEqual, bitWiseAnd, zeroConstant));
 
             asm.registerLIRInstructionValue(this, compEqual);
+        }
+    }
+
+    public static class IntegerTestMoveNode extends BinaryConsumer {
+
+        IntegerTestNode testNode;
+
+        public IntegerTestMoveNode(IntegerTestNode testNode, Variable result, LIRKind lirKind, Value trueValue, Value falseValue) {
+            super(null, result, lirKind, trueValue, falseValue);
+            this.testNode = testNode;
+        }
+
+        @Override
+        public void emit(SPIRVCompilationResultBuilder crb, SPIRVAssembler asm) {
+            Logger.traceCodeGen(Logger.BACKEND.SPIRV, "emit IntegerTestMoveNode: (condition from IntegerTestNode)" + " ? " + x + " : " + y);
+
+            if (testNode instanceof SPIRVLIROp) {
+                ((SPIRVLIROp) testNode).emit(crb, asm);
+            } else {
+                asm.emitValue(crb, testNode);
+            }
+
+            SPIRVId trueValueId;
+            if (x instanceof SPIRVVectorElementSelect) {
+                ((SPIRVLIROp) x).emit(crb, asm);
+                trueValueId = asm.lookUpLIRInstructions(x);
+            } else {
+                trueValueId = getId(x, asm, (SPIRVKind) x.getPlatformKind());
+            }
+            SPIRVId falseValueId;
+            if (y instanceof SPIRVVectorElementSelect) {
+                ((SPIRVLIROp) y).emit(crb, asm);
+                falseValueId = asm.lookUpLIRInstructions(y);
+            } else {
+                falseValueId = getId(y, asm, (SPIRVKind) y.getPlatformKind());
+            }
+
+            SPIRVId comparisonID = asm.lookUpLIRInstructions(testNode);
+
+            SPIRVId resultID = obtainPhiValueIdIfNeeded(asm);
+            asm.currentBlockScope().add(new SPIRVOpSelect(asm.primitives.getTypePrimitive(SPIRVKind.OP_TYPE_INT_32), resultID, comparisonID, trueValueId, falseValueId));
+            asm.registerLIRInstructionValue(this, resultID);
         }
     }
 }

@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2013-2020, APT Group, Department of Computer Science,
+ * Copyright (c) 2013-2022, APT Group, Department of Computer Science,
  * The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -31,6 +31,17 @@ public class TornadoOptions {
 
     public static final String FALSE = "FALSE";
     public static final String TRUE = "TRUE";
+
+    /**
+     * Option to set the device heap's size. It is set to 1GB by default.
+     */
+    public static final long DEFAULT_HEAP_ALLOCATION = RuntimeUtilities.parseSize(System.getProperty("tornado.heap.allocation", "1GB"));
+
+    /**
+     * Option to enable exceptions for the OpenCL generated code. This is
+     * experimental.
+     */
+    public static final boolean ENABLE_EXCEPTIONS = Boolean.parseBoolean(System.getProperty("tornado.exceptions", FALSE));
 
     /**
      * Option to print TornadoVM Internal Bytecodes.
@@ -171,7 +182,6 @@ public class TornadoOptions {
      * Select Shared Memory allocator for SPIRV-Level Zero implementation.
      */
     public static final boolean LEVEL_ZERO_SHARED_MEMORY = getBooleanValue("tornado.spirv.levelzero.memoryAlloc.shared", FALSE);
-
     /**
      * Use return as a common label and insert the instruction before function
      * ending.
@@ -202,18 +212,21 @@ public class TornadoOptions {
      * It enables more fast math optimizations
      */
     public static final boolean FAST_MATH_OPTIMIZATIONS = getBooleanValue("tornado.enable.fastMathOptimizations", TRUE);
-
     /**
      * It optimizes loads and stores for the SPIRV backend. It uses less virtual
      * registers. Experimental Feature.
      *
      */
     public static final boolean OPTIMIZE_LOAD_STORE_SPIRV = getBooleanValue("tornado.spirv.loadstore", FALSE);
-
     /**
      * Use Level Zero Thread Suggestions for the Thread Dispatcher. True by default.
      */
-    public static final boolean USE_LEVELZERO_THREAD_DISPATCHER_SUGGESTIONS = getBooleanValue("tornado.spirv.levelzero.thread.dispatcher", TRUE);;
+    public static final boolean USE_LEVELZERO_THREAD_DISPATCHER_SUGGESTIONS = getBooleanValue("tornado.spirv.levelzero.thread.dispatcher", TRUE);
+    /**
+     * Memory Alignment for the Level Zero buffers (shared memory and or device
+     * memory)
+     */
+    public static final int LEVEL_ZERO_BUFFER_ALIGNMENT = getIntValue("tornado.spirv.levelzero.alignment", "64");
     /**
      * Option to load FPGA pre-compiled binaries.
      */
@@ -240,6 +253,10 @@ public class TornadoOptions {
 
     private static boolean getBooleanValue(String property, String defaultValue) {
         return Boolean.parseBoolean(Tornado.getProperty(property, defaultValue));
+    }
+
+    private static int getIntValue(String property, String defaultValue) {
+        return Integer.parseInt(Tornado.getProperty(property, defaultValue));
     }
 
 }

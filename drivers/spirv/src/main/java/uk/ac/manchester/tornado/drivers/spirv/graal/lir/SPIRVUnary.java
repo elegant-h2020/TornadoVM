@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2021, APT Group, Department of Computer Science,
+ * Copyright (c) 2021-2022 APT Group, Department of Computer Science,
  * School of Engineering, The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -235,11 +235,13 @@ public class SPIRVUnary {
         }
     }
 
-    public static class AbstractMemoryAccess extends UnaryConsumer {
+    public abstract static class AbstractMemoryAccess extends UnaryConsumer {
 
         protected AbstractMemoryAccess(SPIRVUnaryOp opcode, LIRKind valueKind, Value value) {
             super(opcode, valueKind, value);
         }
+
+        public abstract SPIRVMemoryBase getMemoryRegion();
     }
 
     public static class MemoryAccess extends AbstractMemoryAccess {
@@ -370,11 +372,11 @@ public class SPIRVUnary {
         }
 
         private boolean isPrivateMemoryAccess() {
-            return this.memoryRegion.number == SPIRVArchitecture.privateSpace.number;
+            return this.memoryRegion.getNumber() == SPIRVArchitecture.privateSpace.getNumber();
         }
 
         private boolean isLocalMemoryAccess() {
-            return this.memoryRegion.number == SPIRVArchitecture.localSpace.number;
+            return this.memoryRegion.getNumber() == SPIRVArchitecture.localSpace.getNumber();
         }
 
         @Override
@@ -390,8 +392,8 @@ public class SPIRVUnary {
 
         }
 
-        public void emitForLoad(SPIRVAssembler asm) {
-            SPIRVId arrayAccessId = asm.module.getNextId();
+        public void emitForLoad(SPIRVAssembler asm, SPIRVKind resultKind) {
+            SPIRVId resultArrayAccessId = asm.module.getNextId();
 
             SPIRVId baseIndex = asm.lookUpConstant("0", SPIRVKind.OP_TYPE_INT_64);
 
@@ -428,16 +430,22 @@ public class SPIRVUnary {
             SPIRVId baseId = asm.lookUpLIRInstructions(getValue());
 
             SPIRVId type;
-            if (getMemoryRegion().memorySpace == SPIRVMemorySpace.LOCAL) {
+            if (getMemoryRegion().getMemorySpace() == SPIRVMemorySpace.LOCAL) {
                 type = asm.primitives.getPtrOpTypePointerWithStorage((SPIRVKind) getValue().getPlatformKind(), SPIRVStorageClass.Workgroup());
-            } else if (getMemoryRegion().memorySpace == SPIRVMemorySpace.PRIVATE) {
+            } else if (getMemoryRegion().getMemorySpace() == SPIRVMemorySpace.PRIVATE) {
                 type = asm.primitives.getPtrToTypeFunctionPrimitive((SPIRVKind) getValue().getPlatformKind());
             } else {
                 throw new RuntimeException("Memory access not valid for a SPIRVOpInBoundsPtrAccessChain instruction");
             }
 
-            asm.currentBlockScope().add(new SPIRVOpInBoundsPtrAccessChain(type, arrayAccessId, baseId, baseIndex, new SPIRVMultipleOperands(indexId)));
-            asm.registerLIRInstructionValue(this, arrayAccessId);
+            if (resultKind.isVector() && getMemoryRegion().getMemorySpace() == SPIRVMemorySpace.PRIVATE) {
+                // When we copy a collection from private to local, the index is set in the
+                // VLOAD intrinsic. Thus, as index, we choose 0 to comply with CLANG/LLVM
+                indexId = asm.lookUpConstant("0", SPIRVKind.OP_TYPE_INT_64);
+            }
+            // } else {
+            asm.currentBlockScope().add(new SPIRVOpInBoundsPtrAccessChain(type, resultArrayAccessId, baseId, baseIndex, new SPIRVMultipleOperands(indexId)));
+            asm.registerLIRInstructionValue(this, resultArrayAccessId);
         }
     }
 
