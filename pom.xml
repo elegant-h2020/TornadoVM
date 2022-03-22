@@ -1993,6 +1993,5 @@
         <module>assembly</module>
         <module>tornado-api</module>
         <module>tornado-annotation</module>
-        <module>acceleration-service</module>
     </modules>
 </project>
