@@ -342,15 +342,15 @@
                                 <arg>--add-exports</arg>
                                 <arg>jdk.internal.vm.compiler/org.graalvm.compiler.api.runtime=tornado.runtime</arg>
                                 <arg>--add-exports</arg>
-                                <arg>jdk.internal.vm.compiler/org.graalvm.compiler.code=tornado.runtime</arg>
+                                <arg>jdk.internal.vm.compiler/org.graalvm.compiler.code=tornado.runtime,tornado.drivers.common</arg>
                                 <arg>--add-exports</arg>
                                 <arg>jdk.internal.vm.compiler/org.graalvm.compiler.core=tornado.runtime</arg>
                                 <arg>--add-exports</arg>
-                                <arg>
-                                    jdk.internal.vm.compiler/org.graalvm.compiler.core.common=tornado.runtime,tornado.drivers.common
-                                </arg>
+                                <arg>jdk.internal.vm.compiler/org.graalvm.compiler.core.common=tornado.runtime,tornado.drivers.common</arg>
                                 <arg>--add-exports</arg>
-                                <arg>jdk.internal.vm.compiler/org.graalvm.compiler.core.target=tornado.runtime,tornado.drivers.common</arg>
+                                <arg>
+                                    jdk.internal.vm.compiler/org.graalvm.compiler.core.target=tornado.runtime,tornado.drivers.common
+                                </arg>
                                 <arg>--add-exports</arg>
                                 <arg>
                                     jdk.internal.vm.compiler/org.graalvm.compiler.debug=tornado.runtime,tornado.drivers.common
@@ -1104,7 +1104,7 @@
                                 <arg>--add-exports</arg>
                                 <arg>jdk.internal.vm.compiler/org.graalvm.compiler.api.runtime=tornado.runtime</arg>
                                 <arg>--add-exports</arg>
-                                <arg>jdk.internal.vm.compiler/org.graalvm.compiler.code=tornado.runtime</arg>
+                                <arg>jdk.internal.vm.compiler/org.graalvm.compiler.code=tornado.runtime,tornado.drivers.common</arg>
                                 <arg>--add-exports</arg>
                                 <arg>jdk.internal.vm.compiler/org.graalvm.compiler.core=tornado.runtime</arg>
                                 <arg>--add-exports</arg>
