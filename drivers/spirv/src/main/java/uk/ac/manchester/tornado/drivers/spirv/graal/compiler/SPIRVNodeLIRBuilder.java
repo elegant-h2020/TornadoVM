@@ -31,6 +31,7 @@ import static uk.ac.manchester.tornado.runtime.TornadoCoreRuntime.getDebugContex
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -98,7 +99,6 @@ import jdk.vm.ci.meta.Value;
 import uk.ac.manchester.spirvbeehivetoolkit.lib.instructions.operands.SPIRVId;
 import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.drivers.common.logging.Logger;
-import uk.ac.manchester.tornado.drivers.spirv.graal.SPIRVStamp;
 import uk.ac.manchester.tornado.drivers.spirv.graal.SPIRVStampFactory;
 import uk.ac.manchester.tornado.drivers.spirv.graal.lir.LIRPhiVars;
 import uk.ac.manchester.tornado.drivers.spirv.graal.lir.SPIRVBinary;
@@ -431,7 +431,7 @@ public class SPIRVNodeLIRBuilder extends NodeLIRBuilder {
             }
             phi.setStamp(stamp);
         } else if (stamp instanceof ObjectStamp) {
-            SPIRVStamp oStamp = (SPIRVStamp) stamp;
+            ObjectStamp oStamp = (ObjectStamp) stamp;
             SPIRVKind kind = SPIRVKind.fromResolvedJavaTypeToVectorKind(oStamp.javaType(gen.getMetaAccess()));
             if (kind != SPIRVKind.ILLEGAL && kind.isVector()) {
                 stamp = SPIRVStampFactory.getStampFor(kind);
@@ -565,6 +565,11 @@ public class SPIRVNodeLIRBuilder extends NodeLIRBuilder {
         getGen().emitJump(getLIRBlock(loopBegin), true);
     }
 
+    private boolean isPhiValueInPhiTraceTableOrConstant(ValuePhiNode phi) {
+        Value operand = operand(phi.valueAt(0));
+        return phiTrace.containsKey(operand) || (operand instanceof ConstantValue);
+    }
+
     @Override
     public void visitMerge(final AbstractMergeNode mergeNode) {
         Logger.traceBuildLIR(Logger.BACKEND.SPIRV, "visitMerge %s", mergeNode);
@@ -593,18 +598,33 @@ public class SPIRVNodeLIRBuilder extends NodeLIRBuilder {
                 AllocatableValue dest = gen.asAllocatable(operandForPhi(phi));
                 Value src = operand(phi.valueAt(1));
                 append(new SPIRVLIRStmt.AssignStmtWithLoad(dest, src));
-            } else if (TornadoOptions.OPTIMIZE_LOAD_STORE_SPIRV && (phiTrace.containsKey(operand(phi.valueAt(0))))) {
+            } else if (TornadoOptions.OPTIMIZE_LOAD_STORE_SPIRV && isPhiValueInPhiTraceTableOrConstant(phi)) {
                 // We look up of if the first phi-value is in the phiTrace table. In that case,
                 // we need to generate a new OpPhi instruction with a value that is forwarded to
                 // another basic block.
+                List<PhiHolder> phiHolderList = new LinkedList<>();
+
+                final Block block = (Block) gen.getCurrentBlock();
+                for (int i = 0; i < phi.values().size(); i++) {
+                    PhiHolder ph = new PhiHolder(operand(phi.valueAt(i)), block.getPredecessors()[i]);
+                    phiHolderList.add(ph);
+                }
+
                 AllocatableValue result = gen.asAllocatable(operandForPhi(phi));
                 Value src = operand(valuePhi);
-                Value forwardId = operand(phi.valueAt(0));
                 phiTrace.put(result, null);
-                final Block block = (Block) gen.getCurrentBlock();
-                final Block predBlock = block.getFirstPredecessor();
-                Block dependentPhiValueBlock = block.getPredecessors()[1];
-                append(new SPIRVLIRStmt.OpPhiValueOptimization(result, src, predBlock.toString(), dependentPhiValueBlock.toString(), phiMap, phiTrace, forwardId));
+
+                boolean forwardId = true;
+                boolean checkDuplicates = true;
+                append(new SPIRVLIRStmt.OpPhiStmt(result, //
+                        src, //
+                        phiHolderList.get(0).block.toString(), //
+                        phiHolderList.get(1).block.toString(), //
+                        phiMap, //
+                        phiTrace, //
+                        forwardId, //
+                        checkDuplicates, //
+                        phiHolderList));
             }
         }
     }
@@ -656,7 +676,7 @@ public class SPIRVNodeLIRBuilder extends NodeLIRBuilder {
         // that means that we need to generate the OpPhi instruction.
         for (LIRPhiVars.PhiMeta meta : phiVars.getPhiVars()) {
             phiTrace.put(meta.getResultPhi(), null);
-            append(new SPIRVLIRStmt.OpPhiValueOptimization(meta.getResultPhi(), meta.getValue(), dependentPhiValueBlock.toString(), predBlock.toString(), phiMap, phiTrace, null));
+            append(new SPIRVLIRStmt.OpPhiStmt(meta.getResultPhi(), meta.getValue(), dependentPhiValueBlock.toString(), predBlock.toString(), phiMap, phiTrace));
         }
     }
 
@@ -694,8 +714,10 @@ public class SPIRVNodeLIRBuilder extends NodeLIRBuilder {
             }
         }
 
+        // Emit label of the Loop
         append(new SPIRVControlFlow.LoopBeginLabel(block.toString()));
 
+        // Emit pending Phi values
         if (phiVars != null) {
             generateOpPhiInstruction(phiVars, dependentPhiValueBlock, predBlock);
         }
@@ -724,6 +746,24 @@ public class SPIRVNodeLIRBuilder extends NodeLIRBuilder {
             // ignore emit-action
         } else {
             super.emitNode(node);
+        }
+    }
+
+    public static class PhiHolder {
+        public Value value;
+        public Block block;
+
+        public PhiHolder(Value value, Block block) {
+            this.value = value;
+            this.block = block;
+        }
+
+        public Value getValue() {
+            return value;
+        }
+
+        public Block getBlock() {
+            return block;
         }
     }
 

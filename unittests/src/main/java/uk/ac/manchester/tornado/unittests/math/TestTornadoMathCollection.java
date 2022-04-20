@@ -33,25 +33,37 @@ import uk.ac.manchester.tornado.unittests.common.TornadoTestBase;
 public class TestTornadoMathCollection extends TornadoTestBase {
     public static void testTornadoCos(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = TornadoMath.floatCos(a[i]);
+            a[i] = TornadoMath.cos(a[i]);
+        }
+    }
+
+    public static void testTornadoSignum(float[] a) {
+        for (@Parallel int i = 0; i < a.length; i++) {
+            a[i] = TornadoMath.signum(a[i]);
+        }
+    }
+
+    public static void testTornadoSignum(double[] a) {
+        for (@Parallel int i = 0; i < a.length; i++) {
+            a[i] = TornadoMath.signum(a[i]);
         }
     }
 
     public static void testTornadoSin(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = TornadoMath.floatSin(a[i]);
+            a[i] = TornadoMath.sin(a[i]);
         }
     }
 
     public static void testTornadoAcos(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = (TornadoMath.floatAcos(a[i]));
+            a[i] = (TornadoMath.acos(a[i]));
         }
     }
 
     public static void testTornadoAsin(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = (TornadoMath.floatAsin(a[i]));
+            a[i] = (TornadoMath.asin(a[i]));
         }
     }
 
@@ -75,25 +87,25 @@ public class TestTornadoMathCollection extends TornadoTestBase {
 
     public static void testTornadoAtan(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = TornadoMath.floatAtan(a[i]);
+            a[i] = TornadoMath.atan(a[i]);
         }
     }
 
     public static void testTornadoAtan2(float[] a, float[] b) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = TornadoMath.floatAtan2(a[i], b[i]);
+            a[i] = TornadoMath.atan2(a[i], b[i]);
         }
     }
 
     public static void testTornadoTan(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = TornadoMath.floatTan(a[i]);
+            a[i] = TornadoMath.tan(a[i]);
         }
     }
 
     public static void testTornadoTanh(float[] a) {
         for (@Parallel int i = 0; i < a.length; i++) {
-            a[i] = TornadoMath.floatTanh(a[i]);
+            a[i] = TornadoMath.tanh(a[i]);
         }
     }
 
@@ -176,6 +188,92 @@ public class TestTornadoMathCollection extends TornadoTestBase {
         testTornadoCos(seq);
 
         assertArrayEquals(data, seq, 0.01f);
+
+    }
+
+    @Test
+    public void testTornadoMathSignumFloat() {
+        final int size = 128;
+        float[] data = new float[size];
+        float[] seq = new float[size];
+
+        IntStream.range(0, size).parallel().forEach(i -> {
+            data[i] = (float) Math.random();
+            seq[i] = data[i];
+        });
+
+        TaskSchedule s0 = new TaskSchedule("s0");
+        s0.task("t0", TestTornadoMathCollection::testTornadoSignum, data).streamOut(data).execute();
+
+        testTornadoSignum(seq);
+
+        assertArrayEquals(seq, data, 0.01f);
+
+    }
+
+    @Test
+    public void testTornadoMathSignumFloatNaN() {
+        assertNotBackend(TornadoVMBackendType.OPENCL);
+        assertNotBackend(TornadoVMBackendType.SPIRV);
+
+        final int size = 128;
+        float[] data = new float[size];
+        float[] seq = new float[size];
+
+        IntStream.range(0, size).parallel().forEach(i -> {
+            data[i] = Float.NaN;
+            seq[i] = data[i];
+        });
+
+        TaskSchedule s0 = new TaskSchedule("s0");
+        s0.task("t0", TestTornadoMathCollection::testTornadoSignum, data).streamOut(data).execute();
+
+        testTornadoSignum(seq);
+
+        assertArrayEquals(seq, data, 0.01f);
+
+    }
+
+    @Test
+    public void testTornadoMathSignumDouble() {
+        final int size = 128;
+        double[] data = new double[size];
+        double[] seq = new double[size];
+
+        IntStream.range(0, size).parallel().forEach(i -> {
+            data[i] = Math.random();
+            seq[i] = data[i];
+        });
+
+        TaskSchedule s0 = new TaskSchedule("s0");
+        s0.task("t0", TestTornadoMathCollection::testTornadoSignum, data).streamOut(data).execute();
+
+        testTornadoSignum(seq);
+
+        assertArrayEquals(seq, data, 0.01f);
+
+    }
+
+    @Test
+    public void testTornadoMathSignumDoubleNaN() {
+        assertNotBackend(TornadoVMBackendType.OPENCL);
+        assertNotBackend(TornadoVMBackendType.SPIRV);
+
+        final int size = 128;
+        double[] data = new double[size];
+        double[] seq = new double[size];
+
+        IntStream.range(0, size).parallel().forEach(i -> {
+            data[i] = Double.NaN;
+            seq[i] = data[i];
+        });
+
+        TaskSchedule s0 = new TaskSchedule("s0");
+        s0.task("t0", TestTornadoMathCollection::testTornadoSignum, data).streamOut(data).execute();
+
+        testTornadoSignum(seq);
+
+        assertArrayEquals(seq, data, 0.01f);
 
     }
 
