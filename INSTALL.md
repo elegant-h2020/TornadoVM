@@ -1,18 +1,32 @@
 # Installing TornadoVM
 
+**Pre-requisites**
+
+  * Maven Version >= 3.6.3
+  * CMake 3.6 (or newer)
+  * At least one of:
+    * OpenCL: GPUs and CPUs >= 2.1, FPGAs >= 1.0
+    * CUDA 9.0 +
+    * Level Zero >= 1.2
+  * GCC or clang/LLVM (GCC >= 9.0)
+  * Python (>= 3.0)
+
+  For Mac OS X users: the OpenCL support for your Apple model can be confirmed [here](https://support.apple.com/en-gb/HT202823).
+
+
 **Supported Platforms**
 
 The following table includes the platforms that TornadoVM can be executed.
 
 | OS                         | OpenCL Backend                                             | PTX Backend | SPIR-V Backend            | 
 | -------------------------- | ---------------------------------------------------------- | ----------- | ------------------------- |
-| CentOS >= 7.3              | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Level-Zero >= 1.1.2       |
-| Fedora >= 21               | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Level-Zero >= 1.1.2       |
-| Ubuntu >= 16.04            | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Level-Zero >= 1.1.2       |
-| Mac OS X Mojave 10.14.6    | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported             |
-| Mac OS X Catalina 10.15.3  | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported             |
-| Mac OS X Big Sur 11.5.1    | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported             |
-| Windows 10                 | OpenCL for GPUs and CPUs >= 1.2, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported/tested      |
+| CentOS >= 7.3              | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Level-Zero >= 1.1.2       |
+| Fedora >= 21               | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Level-Zero >= 1.1.2       |
+| Ubuntu >= 16.04            | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Level-Zero >= 1.1.2       |
+| Mac OS X Mojave 10.14.6    | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported             |
+| Mac OS X Catalina 10.15.3  | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported             |
+| Mac OS X Big Sur 11.5.1    | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported             |
+| Windows 10                 | OpenCL for GPUs and CPUs >= 2.1, OpenCL for FPGAs >= 1.0)  |  CUDA 9.0+  | Not supported/tested      |
 
 Note: The SPIR-V backend is only supported for Linux OS. Besides, the SPIR-V backend with Level Zero runs on Intel HD Graphics (integrated GPUs). 
 
@@ -20,7 +34,7 @@ Note: The SPIR-V backend is only supported for Linux OS. Besides, the SPIR-V bac
 
 TornadoVM can be built with three compiler backends and is able to generate OpenCL, PTX and SPIR-V code. 
 
-**Important [SPIR-V Backend Configuration]** Prior to the built with the SPIR-V backend, users have to ensure that Level Zero is installed in their system. Please follow the guidelines [here](assembly/src/docs/22_SPIRV_BACKEND_INSTALL.md).
+**Important [SPIR-V Backend Configuration]** Prior to the built with the SPIR-V backend, users have to ensure that Level Zero is installed in their system. Please follow the guidelines [here](assembly/src/docs/11_SPIRV_BACKEND_INSTALL.md).
 
 There are two ways to install TornadoVM: 
 
@@ -33,24 +47,28 @@ Additionally, this installation type will automatically trigger all dependencies
 Note that GraalVM Community Edition releases based on JDK8 are no longer being built for Mac OSx.
 
 ```bash
-./scripts/tornadovmInstaller.sh 
+$ ./scripts/tornadovmInstaller.sh 
 TornadoVM installer for Linux and OSx
-Usage:
-       --jdk8           : Install TornadoVM with OpenJDK 8
-       --jdk11          : Install TornadoVM with OpenJDK 11
-       --jdk17          : Install TornadoVM with OpenJDK 17
-       --graal-jdk-11   : Install TornadoVM with GraalVM and JDK 11 (GraalVM 21.3.0)
-       --graal-jdk-17   : Install TornadoVM with GraalVM and JDK 17 (GraalVM 21.3.0)
-       --corretto-11    : Install TornadoVM with Corretto JDK 11
-       --corretto-17    : Install TornadoVM with Corretto JDK 17
-       --mandrel-11     : Install TornadoVM with Mandrel 21.3.0 (JDK 11)
-       --mandrel-17     : Install TornadoVM with Mandrel 21.3.0 (JDK 17)
-       --windows-jdk-11 : Install TornadoVM with Windows JDK 11
-       --windows-jdk-17 : Install TornadoVM with Windows JDK 17
-       --opencl         : Install TornadoVM and build the OpenCL backend
-       --ptx            : Install TornadoVM and build the PTX backend
-       --spirv          : Install TornadoVM and build the SPIR-V backend
-       --help           : Print this help
+$ ./script/tornadoVMInstaller.sh <JDK> <BACKENDS>
+JDK (select one):
+       --jdk11            : Install TornadoVM with OpenJDK 11
+       --jdk17            : Install TornadoVM with OpenJDK 17
+       --graal-jdk-11     : Install TornadoVM with GraalVM and JDK 11 (GraalVM 22.2.0)
+       --graal-jdk-17     : Install TornadoVM with GraalVM and JDK 17 (GraalVM 22.2.0)
+       --corretto-11      : Install TornadoVM with Corretto JDK 11
+       --corretto-17      : Install TornadoVM with Corretto JDK 17
+       --mandrel-11       : Install TornadoVM with Mandrel 22.2.0 (JDK 11)
+       --mandrel-17       : Install TornadoVM with Mandrel 22.2.0 (JDK 17)
+       --microsoft-jdk-11 : Install TornadoVM with Microsoft JDK 11
+       --microsoft-jdk-17 : Install TornadoVM with Microsoft JDK 17
+       --zulu-jdk-11      : Install TornadoVM with Azul Zulu JDK 11
+       --zulu-jdk-17      : Install TornadoVM with Azul Zulu JDK 17
+TornadoVM Backends:
+       --opencl           : Install TornadoVM and build the OpenCL backend
+       --ptx              : Install TornadoVM and build the PTX backend
+       --spirv            : Install TornadoVM and build the SPIR-V backend
+Help:
+       --help             : Print this help
 ```
 
 **NOTE** Select the desired backend:
@@ -85,7 +103,6 @@ $ source source.sh
 
 TornadoVM can be executed with the following three configurations:
 
-  * TornadoVM with JDK 8 with JVMCI support: see the installation guide [here](assembly/src/docs/11_INSTALL_WITH_JDK8.md).
   * TornadoVM with GraalVM (JDK 11 and JDK 17): see the installation guide [here](assembly/src/docs/10_INSTALL_WITH_GRAALVM.md).
   * TornadoVM with JDK11+ (e.g. OpenJDK [11-17], Red Hat Mandrel, Amazon Corretto): see the installation guide [here](assembly/src/docs/12_INSTALL_WITH_JDK11_PLUS.md).
 
@@ -103,6 +120,53 @@ $ make BACKENDS=opencl,ptx,spirv
 ```
 
 ## 2. Running Examples
+
+TornadoVM includes a tool for launching applications from the command-line:
+
+```bash
+$ tornado --help
+usage: tornado [-h] [--version] [-version] [--debug] [--threadInfo] [--igv] [--igvLowTier] [--printKernel] [--printBytecodes] [--enableProfiler ENABLE_PROFILER] [--dumpProfiler DUMP_PROFILER] [--printJavaFlags] [--devices] [--ea]
+               [--module-path MODULE_PATH] [--classpath CLASSPATH] [--jvm JVM_OPTIONS] [-m MODULE_APPLICATION] [-jar JAR_FILE] [--params APPLICATION_PARAMETERS]
+               [application]
+
+Tool for running TornadoVM Applications. This tool sets all Java options for enabling TornadoVM.
+
+positional arguments:
+  application
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --version             Print version of TornadoVM
+  -version              Print JVM Version
+  --debug               Enable debug mode
+  --threadInfo          Print thread deploy information per task on the accelerator
+  --igv                 Debug Compilation Graphs using Ideal Graph Visualizer (IGV)
+  --igvLowTier          Debug Low Tier Compilation Graphs using Ideal Graph Visualizer (IGV)
+  --printKernel, -pk    Print generated kernel (OpenCL, PTX or SPIR-V)
+  --printBytecodes, -pc
+                        Print the generated TornadoVM bytecodes
+  --enableProfiler ENABLE_PROFILER
+                        Enable the profiler {silent|console}
+  --dumpProfiler DUMP_PROFILER
+                        Dump the profiler to a file
+  --printJavaFlags      Print all the Java flags to enable the execution with TornadoVM
+  --devices             Print information about the accelerators available
+  --ea, -ea             Enable assertions
+  --module-path MODULE_PATH
+                        Module path option for the JVM
+  --classpath CLASSPATH, -cp CLASSPATH, --cp CLASSPATH
+                        Set class-path
+  --jvm JVM_OPTIONS, -J JVM_OPTIONS
+                        Pass Java options to the JVM. Use without spaces: e.g., --jvm="-Xms10g" or -J"-Xms10g"
+  -m MODULE_APPLICATION
+                        Application using Java modules
+  -jar JAR_FILE         Main Java application in a JAR File
+  --params APPLICATION_PARAMETERS
+                        Command-line parameters for the host-application. Example: --params="param1 param2..."
+```
+
+#### Examples: 
+
 
 ```bash
 $ tornado -m tornado.examples/uk.ac.manchester.tornado.examples.compute.MatrixMultiplication1D
@@ -177,7 +241,7 @@ Where `s` is the *TaskSchedule name* and `t` is the *task name*.
 For example running on `driver:device` `1:1` (Intel HD Graphics in our example) will look like this:
 
 ```bash
-$ tornado -Ds0.t0.device=1:1 -m tornado.examples/uk.ac.manchester.tornado.examples.compute.MatrixMultiplication1D
+$ tornado --jvm="-Ds0.t0.device=1:1" -m tornado.examples/uk.ac.manchester.tornado.examples.compute.MatrixMultiplication1D
 ```
 
 The command above will run the MatrixMultiplication1D example on the integrated GPU (Intel HD Graphics).
@@ -213,7 +277,7 @@ List of benchmarks:
 ###### Running a specific benchmark
 
 ```bash
-$ tornado -m tornado.benchmarks/uk.ac.manchester.tornado.benchmarks.BenchmarkRunner sgemm
+$ tornado -m tornado.benchmarks/uk.ac.manchester.tornado.benchmarks.BenchmarkRunner --params="sgemm"
 ```
 
 ## 4. Running Unittests
@@ -305,13 +369,13 @@ To use the TornadoVM API in your projects, you can checkout our maven repository
       <dependency>
          <groupId>tornado</groupId>
          <artifactId>tornado-api</artifactId>
-         <version>0.13</version>
+         <version>0.14.1</version>
       </dependency>
 
       <dependency>
          <groupId>tornado</groupId>
          <artifactId>tornado-matrices</artifactId>
-         <version>0.13</version>
+         <version>0.14.1</version>
       </dependency>
    </dependencies>
 ```
@@ -320,6 +384,8 @@ Notice that, for running with TornadoVM, you will need either the docker images 
 
 #### Versions available
 
+* 0.14.1
+* 0.14
 * 0.13
 * 0.12
 * 0.11

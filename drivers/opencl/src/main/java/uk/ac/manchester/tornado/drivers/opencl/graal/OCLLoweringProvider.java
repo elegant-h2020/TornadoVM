@@ -31,14 +31,12 @@ import static uk.ac.manchester.tornado.api.exceptions.TornadoInternalError.unimp
 
 import java.util.Iterator;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
@@ -105,7 +103,6 @@ import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.LocalArrayNode;
 import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.LocalThreadIdNode;
 import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.LocalThreadSizeNode;
 import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.calc.DivNode;
-import uk.ac.manchester.tornado.drivers.opencl.graal.phases.TornadoFloatingReadReplacement;
 import uk.ac.manchester.tornado.drivers.opencl.graal.snippets.ReduceCPUSnippets;
 import uk.ac.manchester.tornado.drivers.opencl.graal.snippets.ReduceGPUSnippets;
 import uk.ac.manchester.tornado.runtime.TornadoVMConfig;
@@ -127,8 +124,6 @@ import uk.ac.manchester.tornado.runtime.graal.phases.MarkLocalArray;
  * TornadoVM Mid-IR).
  */
 public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
-
-    private static final TornadoFloatingReadReplacement snippetReadReplacementPhase = new TornadoFloatingReadReplacement(true, true);
 
     private static final boolean USE_ATOMICS = false;
     private static boolean gpuSnippet = false;
@@ -156,16 +151,14 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
     }
 
     @Override
-    public void initialize(OptionValues options, Iterable<DebugHandlersFactory> debugHandlersFactories, SnippetCounter.Group.Factory factory, Providers providers,
-            SnippetReflectionProvider snippetReflection) {
-        super.initialize(options, debugHandlersFactories, factory, providers, snippetReflection);
-        initializeSnippets(options, debugHandlersFactories, factory, providers, snippetReflection);
+    public void initialize(OptionValues options, SnippetCounter.Group.Factory factory, Providers providers) {
+        super.initialize(options, factory, providers);
+        initializeSnippets(options, factory, providers);
     }
 
-    private void initializeSnippets(OptionValues options, Iterable<DebugHandlersFactory> debugHandlersFactories, SnippetCounter.Group.Factory factory, Providers providers,
-            SnippetReflectionProvider snippetReflection) {
-        this.gpuReduceSnippets = new ReduceGPUSnippets.Templates(options, debugHandlersFactories, providers, snippetReflection, target);
-        this.cpuReduceSnippets = new ReduceCPUSnippets.Templates(options, debugHandlersFactories, providers, snippetReflection, target);
+    private void initializeSnippets(OptionValues options, SnippetCounter.Group.Factory factory, Providers providers) {
+        this.cpuReduceSnippets = new ReduceCPUSnippets.Templates(options, providers);
+        this.gpuReduceSnippets = new ReduceGPUSnippets.Templates(options, providers);
     }
 
     @Override
@@ -229,6 +222,16 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
         return false;
     }
 
+    @Override
+    public boolean writesStronglyOrdered() {
+        return false;
+    }
+
+    @Override
+    public boolean divisionOverflowIsJVMSCompliant() {
+        return false;
+    }
+
     private void lowerReduceSnippets(StoreAtomicIndexedNode storeIndexed, LoweringTool tool) {
         StructuredGraph graph = storeIndexed.graph();
         ValueNode startIndexNode = storeIndexed.getStartNode();
@@ -269,10 +272,6 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
         } else {
             gpuReduceSnippets.lower(storeIndexed, threadID, oclGlobalSize, tool);
         }
-
-        // We append this phase to move floating reads close to their actual usage and
-        // set FixedAccessNode::lastLocationAccess
-        snippetReadReplacementPhase.apply(graph);
     }
 
     private void lowerStoreAtomicsReduction(Node node, LoweringTool tool) {
@@ -428,7 +427,7 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
             NodeInputList<ValueNode> parameters = callTarget.arguments();
             ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
             if (!callTarget.isStatic() && receiver.stamp(NodeView.DEFAULT) instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
-                ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asNode(), tool);
+                ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asFixedNode(), tool);
                 parameters.set(0, nonNullReceiver);
                 receiver = nonNullReceiver;
             }
@@ -543,7 +542,7 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
     private boolean isLocalIDNode(StoreIndexedNode storeIndexed) {
         // Either the node has as input a LocalArray or has a node which will be lowered
         // to a LocalArray
-        Node nd = storeIndexed.inputs().first().asNode();
+        Node nd = storeIndexed.inputs().first();
         InvokeNode node = nd.inputs().filter(InvokeNode.class).first();
         boolean willLowerToLocalArrayNode = node != null && "Direct#NewArrayNode.newArray".equals(node.callTarget().targetName()) && gpuSnippet;
         return (nd instanceof MarkLocalArray || willLowerToLocalArrayNode);
@@ -552,19 +551,19 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
     private boolean isLocalIDNode(LoadIndexedNode loadIndexedNode) {
         // Either the node has as input a LocalArray or has a node which will be lowered
         // to a LocalArray
-        Node nd = loadIndexedNode.inputs().first().asNode();
+        Node nd = loadIndexedNode.inputs().first();
         InvokeNode node = nd.inputs().filter(InvokeNode.class).first();
         boolean willLowerToLocalArrayNode = node != null && "Direct#NewArrayNode.newArray".equals(node.callTarget().targetName()) && gpuSnippet;
         return (nd instanceof MarkLocalArray || willLowerToLocalArrayNode);
     }
 
     private boolean isPrivateIDNode(StoreIndexedNode storeIndexed) {
-        Node nd = storeIndexed.inputs().first().asNode();
+        Node nd = storeIndexed.inputs().first();
         return (nd instanceof FixedArrayNode);
     }
 
     private boolean isPrivateIDNode(LoadIndexedNode loadIndexedNode) {
-        Node nd = loadIndexedNode.inputs().first().asNode();
+        Node nd = loadIndexedNode.inputs().first();
         return (nd instanceof FixedArrayNode);
     }
 

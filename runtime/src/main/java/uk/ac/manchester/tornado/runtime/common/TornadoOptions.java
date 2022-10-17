@@ -20,8 +20,6 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Authors: Juan Fumero
- *
  */
 package uk.ac.manchester.tornado.runtime.common;
 
@@ -33,9 +31,9 @@ public class TornadoOptions {
     public static final String TRUE = "TRUE";
 
     /**
-     * Option to set the device heap's size. It is set to 1GB by default.
+     * Option to set the device maximum memory usage. It is set to 1GB by default.
      */
-    public static final long DEFAULT_HEAP_ALLOCATION = RuntimeUtilities.parseSize(System.getProperty("tornado.heap.allocation", "1GB"));
+    public static final long DEVICE_AVAILABLE_MEMORY = RuntimeUtilities.parseSize(System.getProperty("tornado.device.memory", "1GB"));
 
     /**
      * Option to enable exceptions for the OpenCL generated code. This is
@@ -84,18 +82,6 @@ public class TornadoOptions {
      * Enable/Disable events dumping on program finish. False by default.
      */
     public static final boolean DUMP_EVENTS = Boolean.parseBoolean(getProperty("tornado.events.dump", FALSE));
-    /**
-     * Sets the call stack limit in bytes for the OpenCL backend. Default is 8192.
-     */
-    public static final int OCL_CALL_STACK_LIMIT = Integer.parseInt(getProperty("tornado.opencl.callstack.limit", "8192"));
-    /**
-     * Sets the call stack limit in bytes for the PTX backend. Default is 8192.
-     */
-    public static final int PTX_CALL_STACK_LIMIT = Integer.parseInt(getProperty("tornado.ptx.callstack.limit", "8192"));
-    /**
-     * Sets the call stack limit in bytes for the SPIRV backend. Default is 8192.
-     */
-    public static final int SPIRV_CALL_STACK_LIMIT = Integer.parseInt(getProperty("tornado.spirv.callstack.limit", "8192"));
     /**
      * Prints the generated code by the TornadoVM compiler. Default is False.
      */
@@ -217,7 +203,7 @@ public class TornadoOptions {
      * registers. Experimental Feature.
      *
      */
-    public static final boolean OPTIMIZE_LOAD_STORE_SPIRV = getBooleanValue("tornado.spirv.loadstore", FALSE);
+    public static final boolean OPTIMIZE_LOAD_STORE_SPIRV = getBooleanValue("tornado.spirv.loadstore", TRUE);
     /**
      * Use Level Zero Thread Suggestions for the Thread Dispatcher. True by default.
      */
@@ -227,6 +213,13 @@ public class TornadoOptions {
      * memory)
      */
     public static final int LEVEL_ZERO_BUFFER_ALIGNMENT = getIntValue("tornado.spirv.levelzero.alignment", "64");
+
+    /**
+     * Enable/Disable the extended memory allocation mode for the Level Zero
+     * Backend. It is enabled by default.
+     */
+    public static final boolean LEVEL_ZERO_EXTENDED_MEMORY_MODE = getBooleanValue("tornado.spirv.levelzero.extended.memory", TRUE);
+
     /**
      * Option to load FPGA pre-compiled binaries.
      */

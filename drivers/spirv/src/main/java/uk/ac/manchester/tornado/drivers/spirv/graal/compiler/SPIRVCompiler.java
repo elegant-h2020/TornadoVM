@@ -45,9 +45,10 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.common.alloc.ComputeBlockOrder;
+import org.graalvm.compiler.core.common.alloc.LinearScanOrder;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
+import org.graalvm.compiler.core.common.cfg.CodeEmissionOrder;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpScope;
@@ -80,6 +81,7 @@ import uk.ac.manchester.tornado.api.common.SchedulableTask;
 import uk.ac.manchester.tornado.api.exceptions.TornadoBailoutRuntimeException;
 import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.api.exceptions.TornadoRuntimeException;
+import uk.ac.manchester.tornado.api.profiler.TornadoProfiler;
 import uk.ac.manchester.tornado.drivers.spirv.SPIRVBackend;
 import uk.ac.manchester.tornado.drivers.spirv.graal.SPIRVProviders;
 import uk.ac.manchester.tornado.drivers.spirv.graal.SPIRVSuitesProvider;
@@ -126,7 +128,7 @@ public class SPIRVCompiler {
             if (r.meta != null && (r.meta.isParallel() || r.meta.isGridSchedulerEnabled())) {
                 isParallel = true;
             }
-            emitBackEnd(r.graph, null, r.installedCodeOwner, r.backend, r.compilationResult, r.factory, null, r.lirSuites, r.isKernel, isParallel);
+            emitBackEnd(r.graph, null, r.installedCodeOwner, r.backend, r.compilationResult, null, r.lirSuites, r.isKernel, isParallel, r.profiler);
         } catch (Throwable e) {
             throw getDebugContext().handle(e);
         }
@@ -176,14 +178,14 @@ public class SPIRVCompiler {
     }
 
     private static void emitBackEnd(StructuredGraph graph, Object stub, ResolvedJavaMethod installedCodeOwner, SPIRVBackend backend, SPIRVCompilationResult compilationResult,
-            CompilationResultBuilderFactory factory, RegisterConfig registerConfig, TornadoLIRSuites lirSuites, boolean isKernel, boolean isParallel) {
+            RegisterConfig registerConfig, TornadoLIRSuites lirSuites, boolean isKernel, boolean isParallel, TornadoProfiler profiler) {
         try (DebugContext.Scope s = getDebugContext().scope("SPIRVBackend", graph.getLastSchedule()); DebugCloseable a = BackEnd.start(getDebugContext())) {
             LIRGenerationResult lirGen = null;
             lirGen = emitLIR(backend, graph, stub, registerConfig, lirSuites, compilationResult, isKernel);
             try (DebugContext.Scope s2 = getDebugContext().scope("SPIRVCodeGen", lirGen, lirGen.getLIR())) {
                 int bytecodeSize = graph.method() == null ? 0 : graph.getBytecodeSize();
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
-                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getMethods(), bytecodeSize, lirGen, compilationResult, installedCodeOwner, factory, isKernel, isParallel);
+                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getMethods(), bytecodeSize, lirGen, compilationResult, installedCodeOwner, isKernel, isParallel, profiler);
             } catch (Throwable e) {
                 throw getDebugContext().handle(e);
             }
@@ -212,12 +214,10 @@ public class SPIRVCompiler {
             assert startBlock.getPredecessorCount() == 0;
 
             LIR lir = null;
-            AbstractBlockBase<?>[] codeEmittingOrder;
-            AbstractBlockBase<?>[] linearScanOrder;
             try (DebugContext.Scope s = getDebugContext().scope("ComputeLinearScanOrder", lir)) {
-                codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
-                linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
-                lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder, options, getDebugContext());
+                CodeEmissionOrder<?> blockOrder = backend.newBlockOrder(blocks.length, startBlock);
+                AbstractBlockBase<?>[] linearScanOrder = LinearScanOrder.computeLinearScanOrder(blocks.length, startBlock);
+                lir = new LIR(schedule.getCFG(), linearScanOrder, graph.getOptions(), graph.getDebug());
                 getDebugContext().dump(DebugContext.INFO_LEVEL, lir, "After linear scan order");
             } catch (Throwable e) {
                 throw getDebugContext().handle(e);
@@ -256,11 +256,11 @@ public class SPIRVCompiler {
     }
 
     private static void emitCode(SPIRVBackend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, List<ResolvedJavaMethod> methods, int bytecodeSize, LIRGenerationResult lirGen,
-            SPIRVCompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory, boolean isKernel, boolean isParallel) {
+            SPIRVCompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, boolean isKernel, boolean isParallel, TornadoProfiler profiler) {
         try (DebugCloseable a = EmitCode.start(getDebugContext())) {
             FrameMap frameMap = lirGen.getFrameMap();
-            final SPIRVCompilationResultBuilder crb = backend.newCompilationResultBuilder(lirGen, frameMap, compilationResult, factory, isKernel, isParallel);
-            backend.emitCode(crb, lirGen.getLIR(), installedCodeOwner);
+            final SPIRVCompilationResultBuilder crb = backend.newCompilationResultBuilder(frameMap, compilationResult, isKernel, isParallel);
+            backend.emitCode(crb, lirGen.getLIR(), installedCodeOwner, profiler);
 
             if (assumptions != null && !assumptions.isEmpty()) {
                 compilationResult.setAssumptions(assumptions.toArray());
@@ -270,19 +270,11 @@ public class SPIRVCompiler {
             }
 
             compilationResult.setNonInlinedMethods(crb.getNonInlinedMethods());
-            SPIRVAssembler asm = (SPIRVAssembler) crb.asm;
-
-            // Set the byte[] from the SPIRVModule
-            // compilationResult.setSPIRVBinary(asm.getSPIRVByteBuffer());
 
             // We need to reuse the assembler instance for all methods to be compiled in the
             // same SPIR-V compilation unit because we need to obtain symbols from the main
             // module.
             compilationResult.setAssembler((SPIRVAssembler) crb.asm);
-
-            // if (crb.getNonInlinedMethods() == null) {
-            // crb.finish();
-            // }
 
             if (getDebugContext().isCountEnabled()) {
                 DebugContext.counter("CompilationResults").increment(getDebugContext());
@@ -325,7 +317,7 @@ public class SPIRVCompiler {
         return sb.toString();
     }
 
-    public static SPIRVCompilationResult compileSketchForDevice(Sketch sketch, CompilableTask task, SPIRVProviders providers, SPIRVBackend backend) {
+    public static SPIRVCompilationResult compileSketchForDevice(Sketch sketch, CompilableTask task, SPIRVProviders providers, SPIRVBackend backend, TornadoProfiler profiler) {
         final StructuredGraph kernelGraph = (StructuredGraph) sketch.getGraph().getReadonlyCopy().copy(getDebugContext());
         ResolvedJavaMethod resolvedJavaMethod = kernelGraph.method();
 
@@ -362,7 +354,8 @@ public class SPIRVCompiler {
                 factory,
                 true,
                 false,
-                batchThreads);
+                batchThreads,
+                profiler);
         // @formatter:on
 
         kernelCompilationRequest.execute();
@@ -401,7 +394,9 @@ public class SPIRVCompiler {
                     factory,
                     false,
                     false,
-                    0);
+                    0,
+                    profiler
+                    );
             // @formatter:on
 
             methodCompilationRequest.execute();
@@ -480,10 +475,11 @@ public class SPIRVCompiler {
         public final boolean isKernel;
         public final boolean buildGraph;
         public final long batchThreads;
+        public TornadoProfiler profiler;
 
         public SPIRVCompilationRequest(StructuredGraph graph, ResolvedJavaMethod installedCodeOwner, Object[] args, TaskMetaData meta, Providers providers, SPIRVBackend backend,
                 PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, TornadoSuites suites, TornadoLIRSuites lirSuites,
-                SPIRVCompilationResult compilationResult, CompilationResultBuilderFactory factory, boolean isKernel, boolean buildGraph, long batchThreads) {
+                SPIRVCompilationResult compilationResult, CompilationResultBuilderFactory factory, boolean isKernel, boolean buildGraph, long batchThreads, TornadoProfiler profiler) {
             this.graph = graph;
             this.installedCodeOwner = installedCodeOwner;
             this.args = args;
@@ -500,11 +496,11 @@ public class SPIRVCompiler {
             this.isKernel = isKernel;
             this.buildGraph = buildGraph;
             this.batchThreads = batchThreads;
+            this.profiler = profiler;
         }
 
         public SPIRVCompilationResult execute() {
             return SPIRVCompiler.compile(this);
         }
     }
-
 }

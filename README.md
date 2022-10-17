@@ -12,7 +12,7 @@ GPUs (NVIDIA, AMD), integrated GPUs (Intel HD Graphics and ARM Mali), and FPGAs 
 
 For a quick introduction please read the following [FAQ](assembly/src/docs/15_FAQ.md).
 
-**Current Release:** TornadoVM 0.13 - 21/03/2022 : See [CHANGELOG](assembly/src/docs/CHANGELOG.md#tornadovm-0.13)
+**Current Release:** TornadoVM 0.14.1 - 29/09/2022 : See [CHANGELOG](assembly/src/docs/CHANGELOG.md#tornadovm-0.14.1)
 
 Previous Releases can be found [here](assembly/src/docs/Releases.md)
 
@@ -20,24 +20,28 @@ Previous Releases can be found [here](assembly/src/docs/Releases.md)
 
 In Linux and Mac OSx, TornadoVM can be installed automatically with the [installation script](INSTALL.md#a-automatic-installation). For example:
 ```bash
-./scripts/tornadovmInstaller.sh 
+$ ./scripts/tornadovmInstaller.sh 
 TornadoVM installer for Linux and OSx
-Usage:
-       --jdk8           : Install TornadoVM with OpenJDK 8
-       --jdk11          : Install TornadoVM with OpenJDK 11
-       --jdk17          : Install TornadoVM with OpenJDK 17
-       --graal-jdk-11   : Install TornadoVM with GraalVM and JDK 11 (GraalVM 21.3.0)
-       --graal-jdk-17   : Install TornadoVM with GraalVM and JDK 16 (GraalVM 21.3.0)
-       --corretto-11    : Install TornadoVM with Corretto JDK 11
-       --corretto-17    : Install TornadoVM with Corretto JDK 16
-       --mandrel-11     : Install TornadoVM with Mandrel 21.3.0 (JDK 11)
-       --mandrel-17     : Install TornadoVM with Mandrel 21.3.0 (JDK 17)
-       --windows-jdk-11 : Install TornadoVM with Windows JDK 11
-       --windows-jdk-17 : Install TornadoVM with Windows JDK 17
-       --opencl         : Install TornadoVM and build the OpenCL backend
-       --ptx            : Install TornadoVM and build the PTX backend
-       --spirv          : Install TornadoVM and build the SPIR-V backend
-       --help           : Print this help
+$ ./scripts/tornadoVMInstaller.sh <JDK> <BACKENDS>
+JDK (select one):
+       --jdk11            : Install TornadoVM with OpenJDK 11
+       --jdk17            : Install TornadoVM with OpenJDK 17
+       --graal-jdk-11     : Install TornadoVM with GraalVM and JDK 11 (GraalVM 22.2.0)
+       --graal-jdk-17     : Install TornadoVM with GraalVM and JDK 17 (GraalVM 22.2.0)
+       --corretto-11      : Install TornadoVM with Corretto JDK 11
+       --corretto-17      : Install TornadoVM with Corretto JDK 17
+       --mandrel-11       : Install TornadoVM with Mandrel 22.2.0 (JDK 11)
+       --mandrel-17       : Install TornadoVM with Mandrel 22.2.0 (JDK 17)
+       --microsoft-jdk-11 : Install TornadoVM with Microsoft JDK 11
+       --microsoft-jdk-17 : Install TornadoVM with Microsoft JDK 17
+       --zulu-jdk-11      : Install TornadoVM with Azul Zulu JDK 11
+       --zulu-jdk-17      : Install TornadoVM with Azul Zulu JDK 17
+TornadoVM Backends:
+       --opencl           : Install TornadoVM and build the OpenCL backend
+       --ptx              : Install TornadoVM and build the PTX backend
+       --spirv            : Install TornadoVM and build the SPIR-V backend
+Help:
+       --help             : Print this help
 ```
 
 **NOTE** Select the desired backend:
@@ -201,12 +205,12 @@ You can import the API and start using TornadoVM. Set this in the `pom.xml` file
 <dependency>
     <groupId>tornado</groupId>
     <artifactId>tornado-api</artifactId>
-    <version>0.13</version>
+    <version>0.14.1</version>
 </dependency>
 <dependency>
     <groupId>tornado</groupId>
     <artifactId>tornado-matrices</artifactId>
-    <version>0.13</version>
+    <version>0.14.1</version>
 </dependency>
 </dependencies>
 ```
@@ -221,7 +225,47 @@ TornadoVM and how to use it.
 
 ## 7. Academic Publications
 
-Selected publications and citations can be found [here](assembly/src/docs/14_PUBLICATIONS.md).
+
+If you are using **TornadoVM >= 0.2** (which includes the Dynamic Reconfiguration, the initial FPGA support and CPU/GPU
+reductions), please use the following citation:
+
+```bibtex
+@inproceedings{Fumero:DARHH:VEE:2019,
+ author = {Fumero, Juan and Papadimitriou, Michail and Zakkak, Foivos S. and Xekalaki, Maria and Clarkson, James and Kotselidis, Christos},
+ title = {{Dynamic Application Reconfiguration on Heterogeneous Hardware.}},
+ booktitle = {Proceedings of the 15th ACM SIGPLAN/SIGOPS International Conference on Virtual Execution Environments},
+ series = {VEE '19},
+ year = {2019},
+ doi = {10.1145/3313808.3313819},
+ publisher = {Association for Computing Machinery}
+}
+```
+
+If you are using **Tornado 0.1** (Initial release), please use the following citation in your work.
+
+```bibtex
+@inproceedings{Clarkson:2018:EHH:3237009.3237016,
+ author = {Clarkson, James and Fumero, Juan and Papadimitriou, Michail and Zakkak, Foivos S. and Xekalaki, Maria and Kotselidis, Christos and Luj\'{a}n, Mikel},
+ title = {{Exploiting High-performance Heterogeneous Hardware for Java Programs Using Graal}},
+ booktitle = {Proceedings of the 15th International Conference on Managed Languages \& Runtimes},
+ series = {ManLang '18},
+ year = {2018},
+ isbn = {978-1-4503-6424-9},
+ location = {Linz, Austria},
+ pages = {4:1--4:13},
+ articleno = {4},
+ numpages = {13},
+ url = {http://doi.acm.org/10.1145/3237009.3237016},
+ doi = {10.1145/3237009.3237016},
+ acmid = {3237016},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ keywords = {Java, graal, heterogeneous hardware, openCL, virtual machine},
+}
+
+```
+
+Selected publications can be found [here](assembly/src/docs/14_PUBLICATIONS.md).
 
 ## 8. Acknowledgments
 
@@ -259,13 +303,13 @@ Each TornadoVM module is licensed as follows:
 
 |  Module | License  |
 |---|---|
-| Tornado-API       |  [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://github.com/beehive-lab/TornadoVM/blob/master/LICENSE_GPLv2CEl) + CLASSPATH Exception |
+| Tornado-API       |  [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html) + CLASSPATH Exception |
 | Tornado-Runtime   |  [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)   |
 | Tornado-Assembly  |  [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)  |
 | Tornado-Drivers   |  [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)   |
-| Tornado-Drivers-OpenCL-Headers |  [![License: MIT](https://img.shields.io/badge/License-MIT%20-orange.svg)](https://github.com/KhronosGroup/OpenCL-Headers/blob/master/LICENSE) |
+| Tornado-Drivers-OpenCL-Headers |  [![License](https://img.shields.io/badge/License-Apache%202.0-red.svg)](https://github.com/KhronosGroup/OpenCL-Headers/blob/master/LICENSE) |
 | Tornado-scripts   |  [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)   |
-| Tornado-Annotation|  [![License](https://img.shields.io/badge/License-Apache%202.0-red.svg)](hhttps://github.com/beehive-lab/TornadoVM/blob/master/LICENSE_APACHE2) |
+| Tornado-Annotation|  [![License](https://img.shields.io/badge/License-Apache%202.0-red.svg)](https://github.com/beehive-lab/TornadoVM/blob/master/LICENSE_APACHE2) |
 | Tornado-Unittests |  [![License](https://img.shields.io/badge/License-Apache%202.0-red.svg)](https://github.com/beehive-lab/TornadoVM/blob/master/LICENSE_APACHE2)  |
 | Tornado-Benchmarks|  [![License](https://img.shields.io/badge/License-Apache%202.0-red.svg)](https://github.com/beehive-lab/TornadoVM/blob/master/LICENSE_APACHE2)  |
 | Tornado-Examples  |  [![License](https://img.shields.io/badge/License-Apache%202.0-red.svg)](https://github.com/beehive-lab/TornadoVM/blob/master/LICENSE_APACHE2)   |

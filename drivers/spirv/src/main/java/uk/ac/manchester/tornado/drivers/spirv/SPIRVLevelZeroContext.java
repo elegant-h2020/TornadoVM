@@ -24,40 +24,45 @@
 package uk.ac.manchester.tornado.drivers.spirv;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroByteBuffer;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroCommandList;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroCommandQueue;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroContext;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroDevice;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroKernel;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.Sizeof;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandListDescription;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandListDescriptor;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandListFlag;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandListHandle;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueueDescription;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueueDescriptor;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueueGroupProperties;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueueGroupPropertyFlags;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueueHandle;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueueMode;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeCommandQueuePriority;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceMemAllocDesc;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceMemAllocDescriptor;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceMemAllocFlags;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeHostMemAllocDesc;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeHostMemAllocDescriptor;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeHostMemAllocFlags;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeRelaxedAllocationLimitsExpDescriptor;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeRelaxedAllocationLimitsFlags;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.utils.LevelZeroUtils;
 import uk.ac.manchester.tornado.drivers.spirv.timestamps.LevelZeroTransferTimeStamp;
 import uk.ac.manchester.tornado.drivers.spirv.timestamps.TimeStamp;
 import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
-import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
 
 public class SPIRVLevelZeroContext extends SPIRVContext {
+
+    private static final String BUFFER_NOT_FOUND_ERROR_MESSAGE = "Should always have a buffer created at this point.";
 
     private LevelZeroContext levelZeroContext;
     private List<SPIRVDeviceContext> spirvDeviceContext;
     private List<SPIRVLevelZeroCommandQueue> commandQueues;
-    private LevelZeroByteBuffer deviceBuffer;
+    // Maps buffer ID -> LevelZeroByteBuffer
+    private final Map<Long, LevelZeroByteBuffer> deviceBufferMap;
 
     // This class should only receive 1 device, not a list of devices.
     public SPIRVLevelZeroContext(SPIRVPlatform platform, List<SPIRVDevice> devices, LevelZeroContext levelZeroContext) {
@@ -72,6 +77,7 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
         }
 
         spirvDeviceContext = new ArrayList<>();
+        deviceBufferMap = new HashMap<>();
 
         // Create LevelZeroDeviceContext
         for (int deviceIndex = 0; deviceIndex < devices.size(); deviceIndex++) {
@@ -115,7 +121,7 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     private LevelZeroCommandQueue createCommandQueue(LevelZeroContext context, SPIRVDevice spirvDevice) {
         LevelZeroDevice device = (LevelZeroDevice) spirvDevice.getDevice();
         // Create Command Queue
-        ZeCommandQueueDescription cmdDescriptor = new ZeCommandQueueDescription();
+        ZeCommandQueueDescriptor cmdDescriptor = new ZeCommandQueueDescriptor();
         cmdDescriptor.setFlags(0);
         cmdDescriptor.setMode(ZeCommandQueueMode.ZE_COMMAND_QUEUE_MODE_DEFAULT);
         cmdDescriptor.setPriority(ZeCommandQueuePriority.ZE_COMMAND_QUEUE_PRIORITY_NORMAL);
@@ -130,7 +136,7 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
 
     private LevelZeroCommandList createCommandList(LevelZeroContext context, SPIRVDevice spirvDevice) {
         LevelZeroDevice device = (LevelZeroDevice) spirvDevice.getDevice();
-        ZeCommandListDescription cmdListDescriptor = new ZeCommandListDescription();
+        ZeCommandListDescriptor cmdListDescriptor = new ZeCommandListDescriptor();
         cmdListDescriptor.setFlags(ZeCommandListFlag.ZE_COMMAND_LIST_FLAG_RELAXED_ORDERING);
         cmdListDescriptor.setCommandQueueGroupOrdinal(getCommandQueueOrdinal(device));
         ZeCommandListHandle commandListHandler = new ZeCommandListHandle();
@@ -157,15 +163,15 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
         return null;
     }
 
-    private ZeDeviceMemAllocDesc createDeviceDescription() {
-        ZeDeviceMemAllocDesc deviceMemAllocDesc = new ZeDeviceMemAllocDesc();
+    private ZeDeviceMemAllocDescriptor createDeviceDescription() {
+        ZeDeviceMemAllocDescriptor deviceMemAllocDesc = new ZeDeviceMemAllocDescriptor();
         deviceMemAllocDesc.setFlags(ZeDeviceMemAllocFlags.ZE_DEVICE_MEM_ALLOC_FLAG_BIAS_CACHED);
         deviceMemAllocDesc.setOrdinal(0);
         return deviceMemAllocDesc;
     }
 
-    private ZeHostMemAllocDesc createHostMemDescription() {
-        ZeHostMemAllocDesc hostMemAllocDesc = new ZeHostMemAllocDesc();
+    private ZeHostMemAllocDescriptor createHostMemDescription() {
+        ZeHostMemAllocDescriptor hostMemAllocDesc = new ZeHostMemAllocDescriptor();
         hostMemAllocDesc.setFlags(ZeHostMemAllocFlags.ZE_HOST_MEM_ALLOC_FLAG_BIAS_CACHED);
         return hostMemAllocDesc;
     }
@@ -179,12 +185,25 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
 
     @Override
     public long allocateMemory(int deviceIndex, long numBytes) {
-        deviceBuffer = new LevelZeroByteBuffer();
+        LevelZeroByteBuffer deviceBuffer = new LevelZeroByteBuffer();
         LevelZeroDevice l0Device = (LevelZeroDevice) devices.get(deviceIndex).getDevice();
-        ZeDeviceMemAllocDesc deviceMemAllocDesc = createDeviceDescription();
+        ZeDeviceMemAllocDescriptor deviceMemAllocDesc = createDeviceDescription();
+
+        ZeRelaxedAllocationLimitsExpDescriptor relaxedAllocationLimitsExpDescriptor = null;
+        if (TornadoOptions.LEVEL_ZERO_EXTENDED_MEMORY_MODE) {
+            relaxedAllocationLimitsExpDescriptor = new ZeRelaxedAllocationLimitsExpDescriptor();
+            relaxedAllocationLimitsExpDescriptor.setFlags(ZeRelaxedAllocationLimitsFlags.ZE_RELAXED_ALLOCATION_LIMITS_EXP_FLAG_MAX_SIZE);
+            relaxedAllocationLimitsExpDescriptor.materialize();
+
+            deviceMemAllocDesc.setNext(relaxedAllocationLimitsExpDescriptor);
+        }
+
         if (TornadoOptions.LEVEL_ZERO_SHARED_MEMORY) {
             // Buffer Allocation in Shared Memory
-            ZeHostMemAllocDesc hostMemAllocDesc = createHostMemDescription();
+            ZeHostMemAllocDescriptor hostMemAllocDesc = createHostMemDescription();
+            if (TornadoOptions.LEVEL_ZERO_EXTENDED_MEMORY_MODE) {
+                hostMemAllocDesc.setNext(relaxedAllocationLimitsExpDescriptor);
+            }
             int result = levelZeroContext.zeMemAllocShared( //
                     levelZeroContext.getDefaultContextPtr(), //
                     deviceMemAllocDesc, //
@@ -205,13 +224,29 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
                     deviceBuffer);
             LevelZeroUtils.errorLog("zeMemAllocDevice", result);
         }
+        deviceBufferMap.put(deviceBuffer.getPtrBuffer(), deviceBuffer);
         return deviceBuffer.getPtrBuffer();
+    }
+
+    @Override
+    public void freeMemory(long buffer, int deviceIndex) {
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.remove(buffer);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
+
+        int result = levelZeroContext.zeMemFree(levelZeroContext.getDefaultContextPtr(), deviceBuffer);
+        LevelZeroUtils.errorLog("zeMemAllocDevice", result);
     }
 
     @Override
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, byte[] value, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -229,6 +264,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, char[] value, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -246,6 +285,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, short[] value, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -263,6 +306,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, int[] array, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -281,6 +328,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, float[] value, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -299,6 +350,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, double[] value, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -317,6 +372,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int readBuffer(int deviceIndex, long bufferId, long srcOffset, long bytes, long[] value, long dstOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -336,6 +395,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, byte[] value, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -354,6 +417,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, char[] value, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -373,6 +440,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, short[] value, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -403,6 +474,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, int[] array, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -422,6 +497,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, float[] array, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -441,6 +520,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, double[] value, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -459,6 +542,10 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
     public int enqueueWriteBuffer(int deviceIndex, long bufferId, long offset, long bytes, long[] value, long hostOffset, int[] waitEvents, ProfilerTransfer profilerTransfer) {
         SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
         LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
+        LevelZeroByteBuffer deviceBuffer = deviceBufferMap.get(bufferId);
+        if (deviceBuffer == null) {
+            TornadoInternalError.shouldNotReachHere(BUFFER_NOT_FOUND_ERROR_MESSAGE);
+        }
 
         if (profilerTransfer != null) {
             registerTimeStamp(commandList, profilerTransfer.getStart(), profilerTransfer.getStop());
@@ -502,21 +589,6 @@ public class SPIRVLevelZeroContext extends SPIRVContext {
         // Reset for the rest of executions
         result = commandList.zeCommandListReset(commandList.getCommandListHandlerPtr());
         LevelZeroUtils.errorLog("zeCommandListReset", result);
-    }
-
-    @Override
-    public long executeAndReadLookupBufferAddressKernel(TaskMetaData meta) {
-        int deviceIndex = 0;
-        SPIRVLevelZeroCommandQueue spirvCommandQueue = commandQueues.get(deviceIndex);
-        LevelZeroCommandList commandList = spirvCommandQueue.getCommandList();
-        LevelZeroCommandQueue commandQueue = spirvCommandQueue.getCommandQueue();
-        LevelZeroDevice device = (LevelZeroDevice) devices.get(deviceIndex).getDevice();
-        String prebuiltBinaries = System.getenv("TORNADO_SDK") + "/examples/generated/lookUpBufferAddress.spv";
-        LevelZeroKernel levelZeroKernel = LevelZeroUtils.compileSPIRVKernel(device, levelZeroContext, "lookUp", prebuiltBinaries);
-        long[] output = new long[1];
-        final int bufferSize = Sizeof.LONG.getNumBytes();
-        long address = LevelZeroUtils.dispatchLookUpBuffer(commandList, commandQueue, levelZeroKernel, deviceBuffer, output, bufferSize);
-        return address;
     }
 
 }

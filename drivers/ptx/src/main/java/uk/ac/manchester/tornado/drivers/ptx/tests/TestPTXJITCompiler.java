@@ -1,8 +1,8 @@
 /*
- * This file is part of Tornado: A heterogeneous programming framework: 
+ * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2013-2020, APT Group, Department of Computer Science,
+ * Copyright (c) 2013-2022, APT Group, Department of Computer Science,
  * The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU General Public License version
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- * 
+ *
  */
 package uk.ac.manchester.tornado.drivers.ptx.tests;
 
@@ -27,9 +27,15 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 
+import org.graalvm.compiler.phases.util.Providers;
+
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import uk.ac.manchester.tornado.api.annotations.Parallel;
 import uk.ac.manchester.tornado.api.common.Access;
+import uk.ac.manchester.tornado.api.common.TornadoDevice;
+import uk.ac.manchester.tornado.api.mm.TornadoDeviceObjectState;
+import uk.ac.manchester.tornado.drivers.common.CompilerUtil;
+import uk.ac.manchester.tornado.drivers.common.MetaCompilation;
 import uk.ac.manchester.tornado.drivers.ptx.PTX;
 import uk.ac.manchester.tornado.drivers.ptx.PTXDriver;
 import uk.ac.manchester.tornado.drivers.ptx.graal.PTXInstalledCode;
@@ -39,9 +45,13 @@ import uk.ac.manchester.tornado.drivers.ptx.graal.compiler.PTXCompilationResult;
 import uk.ac.manchester.tornado.drivers.ptx.graal.compiler.PTXCompiler;
 import uk.ac.manchester.tornado.drivers.ptx.runtime.PTXTornadoDevice;
 import uk.ac.manchester.tornado.runtime.TornadoCoreRuntime;
-import uk.ac.manchester.tornado.runtime.common.CallStack;
 import uk.ac.manchester.tornado.runtime.common.DeviceObjectState;
+import uk.ac.manchester.tornado.runtime.common.KernelArgs;
 import uk.ac.manchester.tornado.runtime.common.TornadoInstalledCode;
+import uk.ac.manchester.tornado.runtime.graal.compiler.TornadoSuitesProvider;
+import uk.ac.manchester.tornado.runtime.profiler.EmptyProfiler;
+import uk.ac.manchester.tornado.runtime.sketcher.Sketch;
+import uk.ac.manchester.tornado.runtime.tasks.CompilableTask;
 import uk.ac.manchester.tornado.runtime.tasks.GlobalObjectState;
 import uk.ac.manchester.tornado.runtime.tasks.meta.ScheduleMetaData;
 import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
@@ -59,39 +69,10 @@ public class TestPTXJITCompiler {
         }
     }
 
-    private Method getMethodForName(Class<?> klass, String nameMethod) {
-        Method method = null;
-        for (Method m : klass.getMethods()) {
-            if (m.getName().equals(nameMethod)) {
-                method = m;
-            }
-        }
-        return method;
-    }
-
-    public static class MetaCompilation {
-        TaskMetaData taskMeta;
-        PTXInstalledCode ptxCode;
-
-        public MetaCompilation(TaskMetaData taskMeta, PTXInstalledCode ptxCode) {
-            this.taskMeta = taskMeta;
-            this.ptxCode = ptxCode;
-        }
-
-        public TaskMetaData getTaskMeta() {
-            return taskMeta;
-        }
-
-        public PTXInstalledCode getPtxCode() {
-            return ptxCode;
-        }
-
-    }
-
-    public MetaCompilation compileMethod(Class<?> klass, String methodName, PTXTornadoDevice tornadoDevice, int[] a, int[] b, double[] c) {
+    public MetaCompilation compileMethod(Class<?> klass, String methodName, PTXTornadoDevice tornadoDevice, Object... parameters) {
 
         // Get the method object to be compiled
-        Method methodToCompile = getMethodForName(klass, methodName);
+        Method methodToCompile = CompilerUtil.getMethodForName(klass, methodName);
 
         // Get Tornado Runtime
         TornadoCoreRuntime tornadoRuntime = TornadoCoreRuntime.getTornadoRuntime();
@@ -102,12 +83,23 @@ public class TestPTXJITCompiler {
         // Get the backend from TornadoVM
         PTXBackend ptxBackend = tornadoRuntime.getDriver(PTXDriver.class).getDefaultBackend();
 
-        // Create a new task for Tornado
-        TaskMetaData taskMeta = TaskMetaData.create(new ScheduleMetaData("S0"), methodToCompile.getName(), methodToCompile);
-        taskMeta.setDevice(PTX.defaultDevice());
+        TornadoDevice device = tornadoRuntime.getDriver(PTXDriver.class).getDefaultDevice();
+
+        // Create a new task for TornadoVM
+        ScheduleMetaData scheduleMetaData = new ScheduleMetaData("s0");
+        // Create a compilable task
+        CompilableTask compilableTask = new CompilableTask(scheduleMetaData, "t0", methodToCompile, parameters);
+        TaskMetaData taskMeta = compilableTask.meta();
+        taskMeta.setDevice(device);
+
+        // 1. Build Common Compiler Phase (Sketcher)
+        // Utility to build a sketcher and insert into the HashMap for fast LookUps
+        Providers providers = ptxBackend.getProviders();
+        TornadoSuitesProvider suites = ptxBackend.getTornadoSuites();
+        Sketch sketch = CompilerUtil.buildSketchForJavaMethod(resolvedJavaMethod, taskMeta, providers, suites);
 
         // Compile the PTX code
-        PTXCompilationResult compilationResult = PTXCompiler.compileCodeForDevice(resolvedJavaMethod, new Object[] { a, b, c }, taskMeta, (PTXProviders) ptxBackend.getProviders(), ptxBackend, 0);
+        PTXCompilationResult compilationResult = PTXCompiler.compileSketchForDevice(sketch, compilableTask, (PTXProviders) providers, ptxBackend, new EmptyProfiler());
 
         // Install the PTX Code in the VM
         TornadoInstalledCode ptxCode = tornadoDevice.getDeviceContext().installCode(compilationResult, resolvedJavaMethod.getName());
@@ -116,7 +108,7 @@ public class TestPTXJITCompiler {
     }
 
     public void runWithPTXAPI(PTXTornadoDevice tornadoDevice, PTXInstalledCode ptxCode, TaskMetaData taskMeta, int[] a, int[] b, double[] c) {
-        PTX.run(tornadoDevice, ptxCode, taskMeta, new Access[] { Access.READ, Access.READ, Access.WRITE }, new Object[] { a, b, c });
+        PTX.run(tornadoDevice, ptxCode, taskMeta, new Access[] { Access.READ, Access.READ, Access.WRITE }, a, b, c);
     }
 
     public void run(PTXTornadoDevice tornadoDevice, PTXInstalledCode ptxCode, TaskMetaData taskMeta, int[] a, int[] b, double[] c) {
@@ -130,25 +122,24 @@ public class TestPTXJITCompiler {
         GlobalObjectState stateC = new GlobalObjectState();
         DeviceObjectState objectStateC = stateC.getDeviceState(tornadoDevice);
 
+        tornadoDevice.allocateBulk(new Object[] { a, b, c }, 0, new TornadoDeviceObjectState[] { objectStateA, objectStateB, objectStateC });
+
         // Copy-IN A
         tornadoDevice.ensurePresent(a, objectStateA, null, 0, 0);
         // Copy-IN B
         tornadoDevice.ensurePresent(b, objectStateB, null, 0, 0);
-        // Alloc C
-        tornadoDevice.ensureAllocated(c, 0, objectStateC);
 
-        // Create stack
-        CallStack stack = tornadoDevice.createStack(3);
+        // Create call wrapper
+        KernelArgs callWrapper = tornadoDevice.createCallWrapper(3);
 
-        // Fill header of call stack with empty values
-        stack.setHeader(new HashMap<>());
+        callWrapper.setKernelContext(new HashMap<>());
 
-        stack.push(a, objectStateA);
-        stack.push(b, objectStateB);
-        stack.push(c, objectStateC);
+        callWrapper.addCallArgument(objectStateA.getObjectBuffer().toBuffer(), true);
+        callWrapper.addCallArgument(objectStateB.getObjectBuffer().toBuffer(), true);
+        callWrapper.addCallArgument(objectStateC.getObjectBuffer().toBuffer(), true);
 
         // Run the code
-        ptxCode.launchWithoutDependencies(stack, null, taskMeta, 0);
+        ptxCode.launchWithoutDependencies(callWrapper, null, taskMeta, 0);
 
         // Obtain the result
         tornadoDevice.streamOutBlocking(c, 0, objectStateC, null);
@@ -170,10 +161,10 @@ public class TestPTXJITCompiler {
         MetaCompilation compileMethod = compileMethod(TestPTXJITCompiler.class, "methodToCompile", tornadoDevice, a, b, c);
 
         // Check with all internal APIs
-        run(tornadoDevice, compileMethod.ptxCode, compileMethod.taskMeta, a, b, c);
+        run(tornadoDevice, (PTXInstalledCode) compileMethod.getInstalledCode(), compileMethod.getTaskMeta(), a, b, c);
 
         // Check with PTX API
-        runWithPTXAPI(tornadoDevice, compileMethod.ptxCode, compileMethod.taskMeta, a, b, c);
+        runWithPTXAPI(tornadoDevice, (PTXInstalledCode) compileMethod.getInstalledCode(), compileMethod.getTaskMeta(), a, b, c);
 
         boolean correct = true;
         for (int i = 0; i < c.length; i++) {

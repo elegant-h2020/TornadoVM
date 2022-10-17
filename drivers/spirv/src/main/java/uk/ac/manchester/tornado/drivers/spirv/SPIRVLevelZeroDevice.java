@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2021, APT Group, Department of Computer Science,
+ * Copyright (c) 2021-2022, APT Group, Department of Computer Science,
  * School of Engineering, The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -29,7 +29,7 @@ import uk.ac.manchester.tornado.api.enums.TornadoDeviceType;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroDevice;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.LevelZeroDriver;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeAPIVersion;
-import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeComputeProperties;
+import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceComputeProperties;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceModuleFlags;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceModuleProperties;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceProperties;
@@ -37,6 +37,7 @@ import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDeviceType;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeDriverHandle;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeMemoryProperties;
 import uk.ac.manchester.tornado.drivers.spirv.levelzero.ZeResult;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 
 public class SPIRVLevelZeroDevice extends SPIRVDevice {
 
@@ -44,7 +45,7 @@ public class SPIRVLevelZeroDevice extends SPIRVDevice {
     private String deviceName;
     private ZeMemoryProperties[] memoryProperties;
     private ZeDeviceProperties deviceProperties;
-    private ZeComputeProperties computeProperties;
+    private ZeDeviceComputeProperties computeProperties;
     ZeAPIVersion apiVersion;
 
     private final long totalMemorySize;
@@ -69,7 +70,7 @@ public class SPIRVLevelZeroDevice extends SPIRVDevice {
     }
 
     private void initDeviceComputeProperties() {
-        computeProperties = new ZeComputeProperties();
+        computeProperties = new ZeDeviceComputeProperties();
         int result = device.zeDeviceGetComputeProperties(device.getDeviceHandlerPtr(), computeProperties);
         errorLog("zeDeviceGetComputeProperties", result);
     }
@@ -161,7 +162,7 @@ public class SPIRVLevelZeroDevice extends SPIRVDevice {
 
     /**
      * Return max thread for each dimension
-     * 
+     *
      * @return
      */
     @Override
@@ -180,6 +181,11 @@ public class SPIRVLevelZeroDevice extends SPIRVDevice {
     }
 
     @Override
+    public int getMaxThreadsPerBlock() {
+        return (int) getDeviceMaxWorkGroupSize()[0];
+    }
+
+    @Override
     public int getDeviceMaxClockFrequency() {
         return deviceProperties.getCoreClockRate();
     }
@@ -192,6 +198,9 @@ public class SPIRVLevelZeroDevice extends SPIRVDevice {
 
     @Override
     public long getDeviceMaxAllocationSize() {
+        if (TornadoOptions.LEVEL_ZERO_EXTENDED_MEMORY_MODE) {
+            return totalMemorySize;
+        }
         return deviceProperties.getMaxMemAllocSize();
     }
 

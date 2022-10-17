@@ -30,14 +30,12 @@ import static uk.ac.manchester.tornado.api.exceptions.TornadoInternalError.unimp
 
 import java.util.Iterator;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
@@ -98,7 +96,6 @@ import uk.ac.manchester.tornado.drivers.spirv.graal.nodes.GroupIdNode;
 import uk.ac.manchester.tornado.drivers.spirv.graal.nodes.LocalArrayNode;
 import uk.ac.manchester.tornado.drivers.spirv.graal.nodes.LocalThreadIdNode;
 import uk.ac.manchester.tornado.drivers.spirv.graal.nodes.LocalThreadSizeNode;
-import uk.ac.manchester.tornado.drivers.spirv.graal.phases.TornadoFloatingReadReplacement;
 import uk.ac.manchester.tornado.drivers.spirv.graal.snippets.ReduceGPUSnippets;
 import uk.ac.manchester.tornado.runtime.TornadoVMConfig;
 import uk.ac.manchester.tornado.runtime.graal.nodes.GetGroupIdFixedWithNextNode;
@@ -117,7 +114,6 @@ import uk.ac.manchester.tornado.runtime.graal.phases.MarkLocalArray;
  */
 public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
 
-    private static final TornadoFloatingReadReplacement snippetReadReplacementPhase = new TornadoFloatingReadReplacement(true, true);
     private static boolean gpuSnippet = false;
     private ConstantReflectionProvider constantReflectionProvider;
     private TornadoVMConfig vmConfig;
@@ -143,14 +139,13 @@ public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
     }
 
     @Override
-    public void initialize(OptionValues options, Iterable<DebugHandlersFactory> debugHandlersFactories, SnippetCounter.Group.Factory factory, Providers providers,
-            SnippetReflectionProvider snippetReflection) {
-        super.initialize(options, debugHandlersFactories, factory, providers, snippetReflection);
-        initializeSnippets(options, debugHandlersFactories, providers, snippetReflection);
+    public void initialize(OptionValues options, SnippetCounter.Group.Factory factory, Providers providers) {
+        super.initialize(options, factory, providers);
+        initializeSnippets(options, providers);
     }
 
-    private void initializeSnippets(OptionValues options, Iterable<DebugHandlersFactory> debugHandlersFactories, Providers providers, SnippetReflectionProvider snippetReflection) {
-        this.gpuReduceSnippets = new ReduceGPUSnippets.Templates(options, debugHandlersFactories, providers, snippetReflection, target);
+    private void initializeSnippets(OptionValues options, Providers providers) {
+        this.gpuReduceSnippets = new ReduceGPUSnippets.Templates(options, providers);
     }
 
     private boolean shouldIgnoreNode(Node node) {
@@ -240,9 +235,6 @@ public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
             gpuReduceSnippets.lower(storeIndexed, threadID, spirvGlobalSize, tool);
         }
 
-        // We append this phase to move floating reads close to their actual usage and
-        // set FixedAccessNode::lastLocationAccess
-        snippetReadReplacementPhase.apply(graph);
     }
 
     private void lowerStoreAtomicsReduction(Node node, LoweringTool tool) {
@@ -326,7 +318,7 @@ public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
             }
 
             if (receiver != null && !callTarget.isStatic() && receiver.stamp(NodeView.DEFAULT) instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
-                ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asNode(), tool);
+                ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asFixedNode(), tool);
                 parameters.set(0, nonNullReceiver);
             }
 
@@ -413,6 +405,17 @@ public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
     }
 
     @Override
+    public boolean writesStronglyOrdered() {
+        unimplemented("SPIRVLoweringProvider::writesStronglyOrdered unimplemented");
+        return false;
+    }
+
+    @Override
+    public boolean divisionOverflowIsJVMSCompliant() {
+        return false;
+    }
+
+    @Override
     protected void lowerArrayLengthNode(ArrayLengthNode arrayLengthNode, LoweringTool tool) {
         StructuredGraph graph = arrayLengthNode.graph();
         ValueNode array = arrayLengthNode.array();
@@ -425,14 +428,14 @@ public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
     private boolean isLocalIDNode(LoadIndexedNode loadIndexedNode) {
         // Either the node has as input a LocalArray or has a node which will be lowered
         // to a LocalArray
-        Node nd = loadIndexedNode.inputs().first().asNode();
+        Node nd = loadIndexedNode.inputs().first();
         InvokeNode node = nd.inputs().filter(InvokeNode.class).first();
         boolean willLowerToLocalArrayNode = node != null && "Direct#NewArrayNode.newArray".equals(node.callTarget().targetName()) && gpuSnippet;
         return (nd instanceof MarkLocalArray || willLowerToLocalArrayNode);
     }
 
     private boolean isPrivateIDNode(LoadIndexedNode loadIndexedNode) {
-        Node nd = loadIndexedNode.inputs().first().asNode();
+        Node nd = loadIndexedNode.inputs().first();
         return (nd instanceof FixedArrayNode);
     }
 
@@ -463,14 +466,14 @@ public class SPIRVLoweringProvider extends DefaultJavaLoweringProvider {
     }
 
     private boolean isPrivateMemoryAccessNode(StoreIndexedNode storeIndexed) {
-        Node node = storeIndexed.inputs().first().asNode();
+        Node node = storeIndexed.inputs().first();
         return (node instanceof FixedArrayNode);
     }
 
     private boolean isLocalMemoryAccessNode(StoreIndexedNode storeIndexed) {
         // Either the node has as input a LocalArray or has a node which will be lowered
         // to a LocalArray
-        Node nd = storeIndexed.inputs().first().asNode();
+        Node nd = storeIndexed.inputs().first();
         InvokeNode node = nd.inputs().filter(InvokeNode.class).first();
         boolean willLowerToLocalArrayNode = node != null && "Direct#NewArrayNode.newArray".equals(node.callTarget().targetName()) && gpuSnippet;
         return (nd instanceof MarkLocalArray || willLowerToLocalArrayNode);

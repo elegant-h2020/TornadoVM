@@ -11,16 +11,19 @@ pipeline {
     }
 
     environment {
-        JDK_8_JAVA_HOME="/opt/jenkins/jdks/openjdk1.8.0_302-jvmci-21.3-b05"
-        CORRETTO_11_JAVA_HOME="/opt/jenkins/jdks/amazon-corretto-11.0.13.8.1-linux-x64"
-        JDK_17_JAVA_HOME="/opt/jenkins/jdks/jdk-17.0.1+12"
-        GRAALVM_11_JAVA_HOME="/opt/jenkins/jdks/graalvm-ce-java11-21.3.0"
-        GRAALVM_17_JAVA_HOME="/opt/jenkins/jdks/graalvm-ce-java17-21.3.0"
+        ZULU_11_JAVA_HOME="/opt/jenkins/jdks/graal-22.2.0/zulu11.56.19-ca-jdk11.0.15-linux_x64"
+        ZULU_17_JAVA_HOME="/opt/jenkins/jdks/graal-22.2.0/zulu17.34.19-ca-jdk17.0.3-linux_x64"
+        CORRETTO_11_JAVA_HOME="/opt/jenkins/jdks/graal-22.2.0/amazon-corretto-11.0.15.9.1-linux-x64"
+        JDK_17_JAVA_HOME="/opt/jenkins/jdks/graal-22.2.0/jdk-17.0.1"
+        GRAALVM_11_JAVA_HOME="/opt/jenkins/jdks/graal-22.2.0/graalvm-ce-java11-22.2.0"
+        GRAALVM_17_JAVA_HOME="/opt/jenkins/jdks/graal-22.2.0/graalvm-ce-java17-22.2.0"
         TORNADO_ROOT="/var/lib/jenkins/workspace/Tornado-pipeline"
         PATH="/var/lib/jenkins/workspace/Slambench/slambench-tornado-refactor/bin:/var/lib/jenkins/workspace/Tornado-pipeline/bin/bin:$PATH"    
         TORNADO_SDK="/var/lib/jenkins/workspace/Tornado-pipeline/bin/sdk" 
         CMAKE_ROOT="/opt/jenkins/cmake-3.10.2-Linux-x86_64"
         KFUSION_ROOT="/var/lib/jenkins/workspace/Slambench/slambench-tornado-refactor"
+        TORNADO_RAY_TRACER_ROOT="/var/lib/jenkins/workspace/TornadoVM-Ray-Tracer"
+        JAVAFX_SDK="/var/lib/jenkins/workspace/TornadoVM-Ray-Tracer/javafx-sdk-18.0.1/"
     }
     stages {
         stage('Checkout Current Branch') {
@@ -34,29 +37,33 @@ pipeline {
             steps {
                 script {
                     if (params.fullBuild == true) {
-                        runJDK8()
-                        runCorrettoJDK11()
+                        runZuluJDK11()
+                        runZuluJDK17()
                         runJDK17()
-                        runGraalVM11()
                         runGraalVM17()
+                        runGraalVM11()
+                        runCorrettoJDK11()
                     } else {
                         Random rnd = new Random()
-                        int NO_OF_JDKS = 5
+                        int NO_OF_JDKS = 6
                         switch (rnd.nextInt(NO_OF_JDKS)) {
                             case 0:
-                                runJDK8()
+                                runZuluJDK11()
                                 break
                             case 1:
-                                runCorrettoJDK11()
+                                runZuluJDK17()
                                 break
                             case 2:
-                                runGraalVM11()
+                                runJDK17()
                                 break
                             case 3:
-                                runGraalVM17()
+                                runGraalVM11()
                                 break
                             case 4:
-                                runJDK17()
+                                runGraalVM17()
+                                break
+                            case 5:
+                                runCorrettoJDK11()
                         }
                     }
                 }
@@ -75,10 +82,18 @@ pipeline {
     }
 }
 
-void runJDK8() {
-    stage('JDK 8') {
-        withEnv(["JAVA_HOME=${JDK_8_JAVA_HOME}"]) {
-            buildAndTest("JDK 8", "jdk-8")
+void runZuluJDK11() {
+    stage('Zulu JDK 11') {
+        withEnv(["JAVA_HOME=${ZULU_11_JAVA_HOME}"]) {
+            buildAndTest("Zulu JDK 11", "jdk-11-plus")
+        }
+    }
+}
+
+void runZuluJDK17() {
+    stage('Zulu JDK 17') {
+        withEnv(["JAVA_HOME=${ZULU_17_JAVA_HOME}"]) {
+            buildAndTest("Zulu JDK 17", "jdk-11-plus")
         }
     }
 }
@@ -87,6 +102,7 @@ void runCorrettoJDK11() {
     stage('Corretto JDK 11') {
         withEnv(["JAVA_HOME=${CORRETTO_11_JAVA_HOME}"]) {
             buildAndTest("Corretto JDK 11", "jdk-11-plus")
+            buildAndTestRayTracer("Corretto JDK 11")
         }
     }
 }
@@ -103,6 +119,7 @@ void runGraalVM11() {
     stage('GraalVM 11') {
         withEnv(["JAVA_HOME=${GRAALVM_11_JAVA_HOME}"]) {
             buildAndTest("GraalVM JDK 11", "graal-jdk-11-plus")
+            buildAndTestRayTracer("GraalVM JDK 11")
         }
     }
 }
@@ -127,7 +144,7 @@ void buildAndTest(String JDK, String tornadoProfile) {
         timeout(time: 12, unit: 'MINUTES') {
             sh 'tornado --devices'
             sh 'tornado-test.py --verbose -J"-Dtornado.unittests.device=0:0 -Dtornado.ptx.priority=100"'
-            sh 'tornado-test.py -V  -J"-Dtornado.unittests.device=0:0 -Dtornado.heap.allocation=1MB -Dtornado.ptx.priority=100" uk.ac.manchester.tornado.unittests.fails.HeapFail#test03'
+            sh 'tornado-test.py -V  -J"-Dtornado.unittests.device=0:0 -Dtornado.device.memory=1MB -Dtornado.ptx.priority=100" uk.ac.manchester.tornado.unittests.fails.HeapFail#test03'
             sh 'test-native.sh'
         }
     }
@@ -137,7 +154,7 @@ void buildAndTest(String JDK, String tornadoProfile) {
                 timeout(time: 12, unit: 'MINUTES') {
                     sh 'tornado --devices'
                     sh 'tornado-test.py --verbose -J"-Dtornado.ptx.priority=100 -Dtornado.unittests.device=1:1"'
-                    sh 'tornado-test.py -V  -J" -Dtornado.ptx.priority=100 -Dtornado.unittests.device=1:1 -Dtornado.heap.allocation=1MB" uk.ac.manchester.tornado.unittests.fails.HeapFail#test03'
+                    sh 'tornado-test.py -V  -J" -Dtornado.ptx.priority=100 -Dtornado.unittests.device=1:1 -Dtornado.device.memory=1MB" uk.ac.manchester.tornado.unittests.fails.HeapFail#test03'
                     sh 'test-native.sh'
                 }
             },
@@ -145,7 +162,7 @@ void buildAndTest(String JDK, String tornadoProfile) {
                 timeout(time: 12, unit: 'MINUTES') {
                     sh 'tornado --devices'
                     sh 'tornado-test.py --verbose -J"-Dtornado.ptx.priority=100 -Dtornado.unittests.device=1:0"'
-                    sh 'tornado-test.py -V  -J" -Dtornado.ptx.priority=100 -Dtornado.unittests.device=1:0 -Dtornado.heap.allocation=1MB" uk.ac.manchester.tornado.unittests.fails.HeapFail#test03'
+                    sh 'tornado-test.py -V  -J" -Dtornado.ptx.priority=100 -Dtornado.unittests.device=1:0 -Dtornado.device.memory=1MB" uk.ac.manchester.tornado.unittests.fails.HeapFail#test03'
                     sh 'test-native.sh'
                 }
             }
@@ -153,11 +170,11 @@ void buildAndTest(String JDK, String tornadoProfile) {
     }
     stage('Benchmarks') {
         timeout(time: 15, unit: 'MINUTES') {
-            sh 'python assembly/src/bin/tornado-benchmarks.py --printBenchmarks '
-            sh 'python assembly/src/bin/tornado-benchmarks.py --medium --skipSequential --iterations 5 '
+            sh 'python3 assembly/src/bin/tornado-benchmarks.py --printBenchmarks '
+            sh 'python3 assembly/src/bin/tornado-benchmarks.py --medium --skipSequential --iterations 5 '
         }
     }
-     stage('Clone & Build KFusion') {
+    stage('Clone & Build KFusion') {
         timeout(time: 5, unit: 'MINUTES') {
             sh 'cd ${KFUSION_ROOT} && git reset HEAD --hard && git fetch && git pull origin master && mvn clean install -DskipTests'
         }
@@ -166,14 +183,37 @@ void buildAndTest(String JDK, String tornadoProfile) {
         sleep 5
         timeout(time: 5, unit: 'MINUTES') {
             sh "cd ${KFUSION_ROOT} && sed -i 's/kfusion.tornado.backend=PTX/kfusion.tornado.backend=OpenCL/' conf/kfusion.settings"
-            sh 'cd ${KFUSION_ROOT} && kfusion kfusion.tornado.Benchmark ${KFUSION_ROOT}/conf/traj2.settings'
+            sh 'cd ${KFUSION_ROOT} && ./scripts/run.sh'
+
         }
     }
     stage('PTX: Run KFusion') {
         sleep 5
         timeout(time: 5, unit: 'MINUTES') {
             sh "cd ${KFUSION_ROOT} && sed -i 's/kfusion.tornado.backend=OpenCL/kfusion.tornado.backend=PTX/' conf/kfusion.settings"
-            sh 'cd ${KFUSION_ROOT} && kfusion kfusion.tornado.Benchmark ${KFUSION_ROOT}/conf/traj2.settings'
+            sh 'cd ${KFUSION_ROOT} && ./scripts/run.sh'
+        }
+    }
+}
+
+void buildAndTestRayTracer(String JDK) {
+    stage('Clone & Build TornadoVM-Ray-Tracer') {
+        if (JDK == 'JDK 8') {
+            echo 'TornadoVM-Ray-Tracer builds for JDK > 11'
+        } else {
+            timeout(time: 5, unit: 'MINUTES') {
+                sh 'cd ${TORNADO_RAY_TRACER_ROOT} && git reset HEAD --hard && git fetch && git checkout master && git pull origin master && mvn clean install'
+            }
+        }
+    }
+    stage('Run TornadoVM-Ray-Tracer') {
+        sleep 5
+        if (JDK == 'JDK 8') {
+            echo 'TornadoVM-Ray-Tracer builds for JDK > 11'
+        } else {
+            timeout(time: 5, unit: 'MINUTES') {
+                sh 'cd ${TORNADO_RAY_TRACER_ROOT} && ./bin/tornadovm-ray-tracer regression'
+            }
         }
     }
 }

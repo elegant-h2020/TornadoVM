@@ -346,7 +346,7 @@ public class PTXLIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
+    public void emitStrategySwitch(SwitchStrategy strategy, AllocatableValue key, LabelRef[] keyTargets, LabelRef defaultTarget) {
         Logger.traceBuildLIR(Logger.BACKEND.PTX, "emitStrategySwitch: strategy=%s key=%s defaultTarget=%s", strategy, key, defaultTarget);
         LIRKind kind = LIRKind.value(PTXKind.PRED);
         Variable predicate = newVariable(kind);
@@ -356,6 +356,16 @@ public class PTXLIRGenerator extends LIRGenerator {
             emitConditionalBranch(keyTargets[i], predicate, false, false);
         }
         append(new PTXControlFlow.Branch(defaultTarget, false, false));
+    }
+
+    @Override
+    protected void emitRangeTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, AllocatableValue key) {
+
+    }
+
+    @Override
+    protected void emitHashTableSwitch(JavaConstant[] keys, LabelRef defaultTarget, LabelRef[] targets, AllocatableValue value, Value hash) {
+
     }
 
     @Override
@@ -371,11 +381,6 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     @Override
     public void emitPrefetchAllocate(Value address) {
-        unimplemented();
-    }
-
-    @Override
-    protected void emitTableSwitch(int lowKey, LabelRef defaultTarget, LabelRef[] targets, Value key) {
         unimplemented();
     }
 
@@ -448,9 +453,9 @@ public class PTXLIRGenerator extends LIRGenerator {
 
     public void emitParameterAlloc() {
         Logger.traceBuildLIR(Logger.BACKEND.PTX, "emitParameterAlloc");
-        Variable stackPointer = newVariable(LIRKind.value(PTXArchitecture.STACK_POINTER.getLirKind()));
-        parameterAllocations.put(PTXArchitecture.STACK_POINTER.getName(), stackPointer);
-        append(new PTXLIRStmt.LoadStmt(new PTXUnary.MemoryAccess(PTXAssemblerConstants.STACK_PTR_NAME), stackPointer, PTXNullaryOp.LD));
+        Variable kernelContextPointer = newVariable(LIRKind.value(PTXArchitecture.KERNEL_CONTEXT.getLirKind()));
+        parameterAllocations.put(PTXArchitecture.KERNEL_CONTEXT.getName(), kernelContextPointer);
+        append(new PTXLIRStmt.LoadStmt(new PTXUnary.MemoryAccess(PTXAssemblerConstants.KERNEL_CONTEXT_NAME), kernelContextPointer, PTXNullaryOp.LD));
     }
 
     public void emitConditionalBranch(LabelRef ref, Variable predicate, boolean isNegated, boolean isLoopEdgeBack) {

@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
+import uk.ac.manchester.tornado.api.exceptions.TornadoRuntimeException;
 import uk.ac.manchester.tornado.drivers.opencl.exceptions.OCLException;
 import uk.ac.manchester.tornado.runtime.common.RuntimeUtilities;
 import uk.ac.manchester.tornado.runtime.common.Tornado;
@@ -50,7 +51,6 @@ public class OCLContext implements OCLExecutionEnvironment {
     private final List<OCLDeviceContext> deviceContexts;
     private final OCLCommandQueue[] queues;
     private final List<OCLProgram> programs;
-    private final ArrayList<Long> allocatedRegions;
     private final OCLPlatform platform;
 
     public OCLContext(OCLPlatform platform, long id, List<OCLTargetDevice> devices) {
@@ -60,7 +60,6 @@ public class OCLContext implements OCLExecutionEnvironment {
         this.deviceContexts = new ArrayList<>(devices.size());
         this.queues = new OCLCommandQueue[devices.size()];
         this.programs = new ArrayList<>();
-        this.allocatedRegions = new ArrayList<>();
     }
 
     static native void clReleaseContext(long id) throws OCLException;
@@ -158,13 +157,16 @@ public class OCLContext implements OCLExecutionEnvironment {
     }
 
     public OCLProgram createProgramWithIL(byte[] spirvBinary, long[] lengths, OCLDeviceContext deviceContext) {
-        OCLProgram program = null;
-
+        OCLProgram program;
         try {
-            program = new OCLProgram(clCreateProgramWithIL(contextID, spirvBinary, lengths), deviceContext);
+            long programID = clCreateProgramWithIL(contextID, spirvBinary, lengths);
+            if (programID == -1) {
+                throw new TornadoRuntimeException("OpenCL version <= 2.1. clCreateProgramWithIL is not supported");
+            }
+            program = new OCLProgram(programID, deviceContext);
             programs.add(program);
         } catch (OCLException e) {
-            TornadoLogger.error(e.getMessage());
+            throw new TornadoRuntimeException(e);
         }
 
         return program;
@@ -197,27 +199,21 @@ public class OCLContext implements OCLExecutionEnvironment {
             }
             long t1 = System.nanoTime();
 
-            for (Long allocatedRegion : allocatedRegions) {
-                clReleaseMemObject(allocatedRegion);
-            }
-            long t2 = System.nanoTime();
-
             for (OCLCommandQueue queue : queues) {
                 if (queue != null) {
                     queue.cleanup();
                 }
             }
 
-            long t3 = System.nanoTime();
+            long t2 = System.nanoTime();
             clReleaseContext(contextID);
-            long t4 = System.nanoTime();
+            long t3 = System.nanoTime();
 
             if (Tornado.FULL_DEBUG) {
                 System.out.printf("cleanup: %-10s..........%.9f s%n", "programs", (t1 - t0) * 1e-9);
-                System.out.printf("cleanup: %-10s..........%.9f s%n", "memory", (t2 - t1) * 1e-9);
-                System.out.printf("cleanup: %-10s..........%.9f s%n", "queues", (t3 - t2) * 1e-9);
-                System.out.printf("cleanup: %-10s..........%.9f s%n", "context", (t4 - t3) * 1e-9);
-                System.out.printf("cleanup: %-10s..........%.9f s%n", "total", (t4 - t0) * 1e-9);
+                System.out.printf("cleanup: %-10s..........%.9f s%n", "queues", (t2 - t1) * 1e-9);
+                System.out.printf("cleanup: %-10s..........%.9f s%n", "context", (t3 - t2) * 1e-9);
+                System.out.printf("cleanup: %-10s..........%.9f s%n", "total", (t3 - t0) * 1e-9);
             }
         } catch (OCLException e) {
             TornadoLogger.error(e.getMessage());
@@ -263,21 +259,28 @@ public class OCLContext implements OCLExecutionEnvironment {
         return buffer;
     }
 
-    public long createBuffer(long flags, long bytes) {
+    public OCLBufferResult createBuffer(long flags, long bytes) {
         return createBuffer(flags, bytes, 0L);
     }
 
-    private long createBuffer(long flags, long bytes, long hostPointer) {
-        long devicePtr = 0;
+    private OCLBufferResult createBuffer(long flags, long bytes, long hostPointer) {
         try {
             final OCLBufferResult result = createBuffer(contextID, flags, bytes, hostPointer);
-            devicePtr = result.getBuffer();
-            allocatedRegions.add(devicePtr);
-            TornadoLogger.info("buffer allocated %s @ 0x%x", RuntimeUtilities.humanReadableByteCount(bytes, false), devicePtr);
+            TornadoLogger.info("buffer allocated %s @ 0x%x", RuntimeUtilities.humanReadableByteCount(bytes, false), result.getBuffer());
+            return result;
         } catch (OCLException e) {
             TornadoLogger.error(e.getMessage());
         }
-        return devicePtr;
+        return null;
+    }
+
+    public void releaseBuffer(long bufferId) {
+        try {
+            clReleaseMemObject(bufferId);
+            TornadoLogger.info("buffer released 0x%x", bufferId);
+        } catch (OCLException e) {
+            TornadoLogger.error(e.getMessage());
+        }
     }
 
     public int getPlatformIndex() {

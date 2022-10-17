@@ -40,9 +40,13 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 import org.graalvm.compiler.lir.asm.DataBuilder;
 import org.graalvm.compiler.lir.asm.FrameContext;
 import org.graalvm.compiler.lir.framemap.FrameMap;
+import org.graalvm.compiler.nodes.AbstractBeginNode;
+import org.graalvm.compiler.nodes.AbstractEndNode;
+import org.graalvm.compiler.nodes.ControlSplitNode;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.IfNode;
+import org.graalvm.compiler.nodes.LoopEndNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.cfg.Block;
@@ -55,6 +59,7 @@ import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.drivers.ptx.PTXDeviceContext;
 import uk.ac.manchester.tornado.drivers.ptx.graal.asm.PTXAssembler;
 import uk.ac.manchester.tornado.drivers.ptx.graal.lir.PTXControlFlow;
+import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
 
 public class PTXCompilationResultBuilder extends CompilationResultBuilder {
     HashSet<Block> rescheduledBasicBlocks;
@@ -65,6 +70,7 @@ public class PTXCompilationResultBuilder extends CompilationResultBuilder {
     private PTXDeviceContext deviceContext;
     private boolean includePrintf;
     private PTXLIRGenerationResult lirGenRes;
+    private TaskMetaData meta;
 
     public PTXCompilationResultBuilder(CodeGenProviders providers, FrameMap frameMap, Assembler asm, DataBuilder dataBuilder, FrameContext frameContext, OptionValues options, DebugContext debug,
             CompilationResult compilationResult) {
@@ -246,10 +252,74 @@ public class PTXCompilationResultBuilder extends CompilationResultBuilder {
         rescheduledBasicBlocks.add(block);
     }
 
+    private Block getBlockTrueBranch(Block basicBlock) {
+        IfNode ifNode = (IfNode) basicBlock.getDominator().getEndNode();
+        for (Block b : basicBlock.getDominator().getSuccessors()) {
+            if (ifNode.trueSuccessor() == b.getBeginNode()) {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    private boolean isFalseSuccessorWithLoopEnd(IfNode ifNode, Block basicBlock) {
+        return isCurrentBlockAFalseBranch(ifNode, basicBlock) && basicBlock.getEndNode() instanceof LoopEndNode;
+    }
+
+    private boolean isCurrentBlockAFalseBranch(IfNode ifNode, Block basicBlock) {
+        return ifNode.falseSuccessor() == basicBlock.getBeginNode();
+    }
+
+    private boolean isTrueBranchALoopExitNode(IfNode ifNode) {
+        return ifNode.trueSuccessor() instanceof AbstractBeginNode;
+    }
+
+    private boolean isTrueBranchWithEndNodeOrNotControlSplit(Block blockTrueBranch) {
+        return ((blockTrueBranch.getEndNode() instanceof AbstractEndNode) || !(blockTrueBranch.getEndNode() instanceof ControlSplitNode));
+    }
+
+    /**
+     * From Graal 22.1.0 the graph traversal was changed. This method reschedules
+     * the current basic block to generate always the true condition before the
+     * false condition only if we have a LoopEndNode node in the false branch, or we
+     * have a LoopExit in the true branch contains a LoopExitNode or it is not a
+     * control Split (due to nested control-flow).
+     *
+     * @param basicBlock
+     *            {@link Block}
+     * @param visitor
+     *            {@link PTXBlockVisitor}
+     * @param visited
+     *            {@link HashSet}
+     * @param pending
+     *            {@link HashMap}
+     */
+    private void rescheduleTrueBranchConditionsIfNeeded(Block basicBlock, PTXBlockVisitor visitor, HashSet<Block> visited, HashMap<Block, Block> pending) {
+        if (!basicBlock.isLoopHeader() && basicBlock.getDominator() != null && basicBlock.getDominator().getEndNode() instanceof IfNode) {
+            IfNode ifNode = (IfNode) basicBlock.getDominator().getEndNode();
+            Block blockTrueBranch = getBlockTrueBranch(basicBlock);
+            if (isFalseSuccessorWithLoopEnd(ifNode, basicBlock) //
+                    || (isCurrentBlockAFalseBranch(ifNode, basicBlock) //
+                            && isTrueBranchALoopExitNode(ifNode) //
+                            && isTrueBranchWithEndNodeOrNotControlSplit(blockTrueBranch))) {
+                Block[] successors = basicBlock.getDominator().getSuccessors();
+                for (Block b : successors) {
+                    if (b.getBeginNode() == ifNode.trueSuccessor() && !visited.contains(b)) {
+                        pending.put(basicBlock, b);
+                        rescheduleBasicBlock(basicBlock, visitor, visited, pending);
+                    }
+                }
+            }
+        }
+    }
+
     private void traverseControlFlowGraph(Block basicBlock, PTXBlockVisitor visitor, HashSet<Block> visited, HashMap<Block, Block> pending) {
         if (pending.containsKey(basicBlock) && !visited.contains(pending.get(basicBlock))) {
             rescheduleBasicBlock(basicBlock, visitor, visited, pending);
         }
+
+        // New call due to the integration with Graal-IR 22.1.0
+        rescheduleTrueBranchConditionsIfNeeded(basicBlock, visitor, visited, pending);
 
         visitor.enter(basicBlock);
         visited.add(basicBlock);
@@ -317,5 +387,13 @@ public class PTXCompilationResultBuilder extends CompilationResultBuilder {
 
     public void setDeviceContext(PTXDeviceContext deviceContext) {
         this.deviceContext = deviceContext;
+    }
+
+    public TaskMetaData getTaskMetaData() {
+        return meta;
+    }
+
+    public void setTaskMetaData(TaskMetaData metaData) {
+        this.meta = metaData;
     }
 }

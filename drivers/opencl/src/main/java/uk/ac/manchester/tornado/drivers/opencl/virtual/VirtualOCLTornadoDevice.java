@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2020, APT Group, Department of Computer Science,
+ * Copyright (c) 2020-2022, APT Group, Department of Computer Science,
  * School of Engineering, The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -54,8 +54,8 @@ import uk.ac.manchester.tornado.drivers.opencl.graal.backend.OCLBackend;
 import uk.ac.manchester.tornado.drivers.opencl.graal.compiler.OCLCompilationResult;
 import uk.ac.manchester.tornado.drivers.opencl.graal.compiler.OCLCompiler;
 import uk.ac.manchester.tornado.runtime.TornadoCoreRuntime;
-import uk.ac.manchester.tornado.runtime.common.CallStack;
 import uk.ac.manchester.tornado.runtime.common.DeviceObjectState;
+import uk.ac.manchester.tornado.runtime.common.KernelArgs;
 import uk.ac.manchester.tornado.runtime.common.RuntimeUtilities;
 import uk.ac.manchester.tornado.runtime.common.Tornado;
 import uk.ac.manchester.tornado.runtime.common.TornadoAcceleratorDevice;
@@ -162,17 +162,12 @@ public class VirtualOCLTornadoDevice implements TornadoAcceleratorDevice {
     }
 
     @Override
-    public CallStack createStack(int numArgs) {
+    public KernelArgs createCallWrapper(int numArgs) {
         return null;
     }
 
     @Override
-    public ObjectBuffer createBuffer(int[] arr) {
-        return null;
-    }
-
-    @Override
-    public ObjectBuffer createOrReuseBuffer(int[] arr) {
+    public ObjectBuffer createOrReuseAtomicsBuffer(int[] arr) {
         return null;
     }
 
@@ -191,7 +186,7 @@ public class VirtualOCLTornadoDevice implements TornadoAcceleratorDevice {
             OCLProviders providers = (OCLProviders) getBackend().getProviders();
             TornadoProfiler profiler = task.getProfiler();
             profiler.start(ProfilerType.TASK_COMPILE_GRAAL_TIME, taskMeta.getId());
-            final OCLCompilationResult result = OCLCompiler.compileSketchForDevice(sketch, executable, providers, getBackend());
+            final OCLCompilationResult result = OCLCompiler.compileSketchForDevice(sketch, executable, providers, getBackend(), executable.getProfiler());
             profiler.stop(ProfilerType.TASK_COMPILE_GRAAL_TIME, taskMeta.getId());
             profiler.sum(ProfilerType.TOTAL_GRAAL_COMPILE_TIME, profiler.getTaskTimer(ProfilerType.TASK_COMPILE_GRAAL_TIME, taskMeta.getId()));
 
@@ -272,7 +267,19 @@ public class VirtualOCLTornadoDevice implements TornadoAcceleratorDevice {
     }
 
     @Override
-    public int ensureAllocated(Object object, long batchSize, TornadoDeviceObjectState state) {
+    public int allocate(Object object, long batchSize, TornadoDeviceObjectState state) {
+        unimplemented();
+        return -1;
+    }
+
+    @Override
+    public int allocateBulk(Object[] objects, long batchSize, TornadoDeviceObjectState[] states) {
+        unimplemented();
+        return -1;
+    }
+
+    @Override
+    public int deallocate(TornadoDeviceObjectState state) {
         unimplemented();
         return -1;
     }
@@ -346,11 +353,6 @@ public class VirtualOCLTornadoDevice implements TornadoAcceleratorDevice {
     @Override
     public int enqueueMarker(int[] events) {
         return getDeviceContext().enqueueMarker(events);
-    }
-
-    @Override
-    public void dumpMemory(String file) {
-        unimplemented();
     }
 
     @Override

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#  Copyright (c) 2020-2021, APT Group, Department of Computer Science,
+#  Copyright (c) 2020-2022, APT Group, Department of Computer Science,
 #  The University of Manchester.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,63 +21,6 @@ DIRECTORY_DEPENDENCIES="etc/dependencies"
 function getPlatform() {
     platform=$(uname | tr '[:upper:]' '[:lower:]')
     echo "$platform"
-}
-
-function checkJavaVersion() {
-    platform=$(getPlatform)
-    pass=$1
-    if [ -z "$JAVA_HOME" ];
-    then
-	    echo "JAVA_HOME is not set. Use OpenJDK 8 >= 141 <= 1.9"
-            if [[ "$platform" == 'linux' ]]; then
-	    	# shellcheck disable=SC2028
-	    	echo "\t You can use \`ls -l /etc/alternatives/java\` to get the PATHs"
-	    elif [[ "$platform" == 'darwin' ]]; then
-		    echo "\t You can use export JAVA_HOME=\$(/usr/libexec/java_home)"
-	    fi
- 	    pass=0
-    else
- 	    echo "JDK Version: OK"
-    fi
-    return $pass
-}
-
-function checkPrerequisites() {
-    currentver="$(gcc -dumpversion)"
-    requiredver="5.5.0"
-    pass=1
-    # if [ "$(printf '%s\n' "$requiredver" "$currentver" | sort -V | head -n1)" = "$requiredver" ]; then
-    #     echo "GCC Vesion: OK"
-    # else
-    #     echo "Error: GCC Version is less than 5.5.0"
-    #     pass=0
-    # fi
-
-    #$pass=checkJavaVersion($pass)
-
-    if [[ $pass == 0 ]]; then
-        exit
-    fi
-}
-
-# Download OpenJDK with JVMCI support
-function downloadOpenJDK8() {
-    export JDK_BASE=$(pwd)
-    platform=$(getPlatform)
-    if [[ "$platform" == 'linux' ]]; then
-        echo "Downloading JDK8 with JVMCI... ~100MB"
-        wget https://github.com/graalvm/graal-jvmci-8/releases/download/jvmci-21.3-b05/openjdk-8u302+06-jvmci-21.3-b05-linux-amd64.tar.gz
-	    tar xvzf openjdk-8u302+06-jvmci-21.3-b05-linux-amd64.tar.gz
-        export JAVA_HOME=$JDK_BASE/openjdk1.8.0_302-jvmci-21.3-b05
-    elif [[ "$platform" == 'darwin' ]]; then
-        echo "JDK8 with JVMCI for Mac OSx is not supported for Graal 21.3"
-        cd ../ && rm -rf $dirname
-	exit 0
-    else
-        echo "OS platform not supported"
-        cd ../ & rm -rf $dirname
-        exit 0
-    fi
 }
 
 function downloadOpenJDK11() {
@@ -109,26 +52,26 @@ function downloadOpenJDK17() {
 function downloadGraalVMJDK11() {
     platform=$(getPlatform)
     if [[ "$platform" == 'linux' ]]; then
-        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.3.0/graalvm-ce-java11-linux-amd64-21.3.0.tar.gz
-	tar -xf graalvm-ce-java11-linux-amd64-21.3.0.tar.gz
-	export JAVA_HOME=$PWD/graalvm-ce-java11-21.3.0
+        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.2.0/graalvm-ce-java11-linux-amd64-22.2.0.tar.gz
+	tar -xf graalvm-ce-java11-linux-amd64-22.2.0.tar.gz
+	export JAVA_HOME=$PWD/graalvm-ce-java11-22.2.0
     elif [[ "$platform" == 'darwin' ]]; then
-        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.3.0/graalvm-ce-java11-darwin-amd64-21.3.0.tar.gz
-        tar -xf graalvm-ce-java11-darwin-amd64-21.3.0.tar.gz
-        export JAVA_HOME=$PWD/graalvm-ce-java11-21.3.0/Contents/Home/
+        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.2.0/graalvm-ce-java11-darwin-amd64-22.2.0.tar.gz
+        tar -xf graalvm-ce-java11-darwin-amd64-22.2.0.tar.gz
+        export JAVA_HOME=$PWD/graalvm-ce-java11-22.2.0/Contents/Home/
     fi
 }
 
 function downloadGraalVMJDK17() {
     platform=$(getPlatform)
     if [[ "$platform" == 'linux' ]]; then
-        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.3.0/graalvm-ce-java17-linux-amd64-21.3.0.tar.gz
-        tar -xf graalvm-ce-java17-linux-amd64-21.3.0.tar.gz
-        export JAVA_HOME=$PWD/graalvm-ce-java17-21.3.0
+        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.2.0/graalvm-ce-java17-linux-amd64-22.2.0.tar.gz
+        tar -xf graalvm-ce-java17-linux-amd64-22.2.0.tar.gz
+        export JAVA_HOME=$PWD/graalvm-ce-java17-22.2.0
     elif [[ "$platform" == 'darwin' ]]; then
-        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.3.0/graalvm-ce-java17-darwin-amd64-21.3.0.tar.gz
-        tar -xf graalvm-ce-java17-darwin-amd64-21.3.0.tar.gz
-        export JAVA_HOME=$PWD/graalvm-ce-java17-21.3.0/Contents/Home/
+        wget https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.2.0/graalvm-ce-java17-darwin-amd64-22.2.0.tar.gz
+        tar -xf graalvm-ce-java17-darwin-amd64-22.2.0.tar.gz
+        export JAVA_HOME=$PWD/graalvm-ce-java17-22.2.0/Contents/Home/
     fi
 }
 
@@ -137,7 +80,7 @@ function downloadCorretto11() {
     if [[ "$platform" == 'linux' ]]; then
         wget https://corretto.aws/downloads/latest/amazon-corretto-11-x64-linux-jdk.tar.gz
         tar xf amazon-corretto-11-x64-linux-jdk.tar.gz
-        export JAVA_HOME=$PWD/amazon-corretto-11.0.13.8.1-linux-x64/
+        export JAVA_HOME=$PWD/amazon-corretto-11.0.15.9.1-linux-x64
     elif [[ "$platform" == 'darwin' ]]; then
 	wget https://corretto.aws/downloads/latest/amazon-corretto-11-x64-macos-jdk.tar.gz
         tar xf amazon-corretto-11-x64-macos-jdk.tar.gz
@@ -150,7 +93,7 @@ function downloadCorretto17() {
     if [[ "$platform" == 'linux' ]]; then
         wget https://corretto.aws/downloads/latest/amazon-corretto-17-x64-linux-jdk.tar.gz
         tar xf amazon-corretto-17-x64-linux-jdk.tar.gz
-        export JAVA_HOME=$PWD/amazon-corretto-17.0.1.12.1-linux-x64
+        export JAVA_HOME=$PWD/amazon-corretto-17.0.3.6.1-linux-x64
     elif [[ "$platform" == 'darwin' ]]; then
         wget https://corretto.aws/downloads/latest/amazon-corretto-17-x64-macos-jdk.tar.gz
         tar xf amazon-corretto-17-x64-macos-jdk.tar.gz
@@ -161,9 +104,9 @@ function downloadCorretto17() {
 function downloadMandrel11() {
     platform=$(getPlatform)
     if [[ "$platform" == 'linux' ]]; then
-        wget https://github.com/graalvm/mandrel/releases/download/mandrel-21.3.0.0-Final/mandrel-java11-linux-amd64-21.3.0.0-Final.tar.gz
-        tar xf mandrel-java11-linux-amd64-21.3.0.0-Final.tar.gz
-        export JAVA_HOME=$PWD/mandrel-java11-21.3.0.0-Final
+        wget https://github.com/graalvm/mandrel/releases/download/mandrel-22.2.0.0-Final/mandrel-java11-linux-amd64-22.2.0.0-Final.tar.gz
+        tar xf mandrel-java11-linux-amd64-22.2.0.0-Final.tar.gz
+        export JAVA_HOME=$PWD/mandrel-java11-22.2.0.0-Final
     elif [[ "$platform" == 'darwin' ]]; then
         echo "OS Not supported"
         cd ../ && rm -rf $dirname
@@ -174,9 +117,9 @@ function downloadMandrel11() {
 function downloadMandrel17() {
     platform=$(getPlatform)
     if [[ "$platform" == 'linux' ]]; then
-        wget https://github.com/graalvm/mandrel/releases/download/mandrel-21.3.0.0-Final/mandrel-java17-linux-amd64-21.3.0.0-Final.tar.gz
-        tar xf mandrel-java17-linux-amd64-21.3.0.0-Final.tar.gz
-        export JAVA_HOME=$PWD/mandrel-java17-21.3.0.0-Final
+        wget https://github.com/graalvm/mandrel/releases/download/mandrel-22.2.0.0-Final/mandrel-java17-linux-amd64-22.2.0.0-Final.tar.gz
+        tar xf mandrel-java17-linux-amd64-22.2.0.0-Final.tar.gz
+        export JAVA_HOME=$PWD/mandrel-java17-22.2.0.0-Final
     elif [[ "$platform" == 'darwin' ]]; then
         echo "OS Not supported"
         cd ../ && rm -rf $dirname
@@ -184,7 +127,7 @@ function downloadMandrel17() {
     fi
 }
 
-function downloadWindowsJDK11() {
+function downloadMicrosoftJDK11() {
     platform=$(getPlatform)
     if [[ "$platform" == 'linux' ]]; then
         wget https://aka.ms/download-jdk/microsoft-jdk-11.0.13.8.1-linux-x64.tar.gz
@@ -197,7 +140,7 @@ function downloadWindowsJDK11() {
     fi
 }
 
-function downloadWindowsJDK17() {
+function downloadMicrosoftJDK17() {
     platform=$(getPlatform)
     if [[ "$platform" == 'linux' ]]; then
         wget https://aka.ms/download-jdk/microsoft-jdk-17.0.1.12.1-linux-x64.tar.gz
@@ -207,6 +150,32 @@ function downloadWindowsJDK17() {
         wget https://aka.ms/download-jdk/microsoft-jdk-17.0.1.12.1-macOS-x64.tar.gz
         tar xf microsoft-jdk-11.0.13.8.1-macOS-x64.tar.gz
         export JAVA_HOME=$PWD/jdk-11.0.13+8/Contents/Home
+    fi
+}
+
+function downloadZuluJDK11() {
+    platform=$(getPlatform)
+    if [[ "$platform" == 'linux' ]]; then
+        wget https://cdn.azul.com/zulu/bin/zulu11.56.19-ca-jdk11.0.15-linux_x64.tar.gz
+        tar xf zulu11.56.19-ca-jdk11.0.15-linux_x64.tar.gz
+        export JAVA_HOME=$PWD/zulu11.56.19-ca-jdk11.0.15-linux_x64
+    elif [[ "$platform" == 'darwin' ]]; then
+        wget https://cdn.azul.com/zulu/bin/zulu11.56.19-ca-jdk11.0.15-macosx_x64.tar.gz
+        tar xf zulu11.56.19-ca-jdk11.0.15-macosx_x64.tar.gz
+        export JAVA_HOME=$PWD/zulu11.56.19-ca-jdk11.0.15-macosx_x64/zulu-11.jdk/Contents/Home
+    fi
+}
+
+function downloadZuluJDK17() {
+    platform=$(getPlatform)
+    if [[ "$platform" == 'linux' ]]; then
+        wget https://cdn.azul.com/zulu/bin/zulu17.34.19-ca-jdk17.0.3-linux_x64.tar.gz
+        tar xf zulu17.34.19-ca-jdk17.0.3-linux_x64.tar.gz
+        export JAVA_HOME=$PWD/zulu17.34.19-ca-jdk17.0.3-linux_x64
+    elif [[ "$platform" == 'darwin' ]]; then
+        wget https://cdn.azul.com/zulu/bin/zulu17.34.19-ca-jdk17.0.3-macosx_x64.tar.gz
+        tar xf zulu17.34.19-ca-jdk17.0.3-macosx_x64.tar.gz
+        export JAVA_HOME=$PWD/zulu17.34.19-ca-jdk17.0.3-macosx_x64/zulu-17.jdk/Contents/Home
     fi
 }
 
@@ -247,6 +216,19 @@ function downloadCMake() {
         unZipAndSetCmake $platform
     else
         unZipAndSetCmake $platform
+    fi
+}
+
+function downloadMaven() {
+    platform=$(getPlatform)
+    if [[ "$platform" == 'linux' ]]; then
+        wget https://dlcdn.apache.org/maven/maven-3/3.8.6/binaries/apache-maven-3.8.6-bin.tar.gz
+        tar xvzf apache-maven-3.8.6-bin.tar.gz 
+        export MAVENPATH=`pwd`/apache-maven-3.8.6/bin 
+        export PATH=`pwd`/apache-maven-3.8.6/bin:$PATH
+    else 
+        echo "OS platform not supported"
+        exit 0
     fi
 }
 
@@ -305,21 +287,8 @@ function setupVariables() {
     echo -e "\nTo run TornadoVM, run \`. source.sh\`"
 }
 
-function installForOpenJDK8() {
-    checkPrerequisites
-    dirname=$DIRECTORY_DEPENDENCIES"/TornadoVM-OpenJDK8"
-    mkdir -p $dirname
-    cd $dirname
-    downloadOpenJDK8
-    downloadCMake
-    cd -
-    setupTornadoVM jdk-8
-    setupVariables $dirname
-}
-
 function installForOpenJDK11() {
-    checkPrerequisites
-    dirname="TornadoVM-OpenJDK11"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-OpenJDK11"
     mkdir -p $dirname
     cd $dirname
     downloadOpenJDK11
@@ -330,7 +299,6 @@ function installForOpenJDK11() {
 }
 
 function installForOpenJDK17() {
-    checkPrerequisites
     dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-OpenJDK17"
     mkdir -p $dirname
     cd $dirname
@@ -342,8 +310,7 @@ function installForOpenJDK17() {
 }
 
 function installForGraalJDK11() {
-    checkPrerequisites
-    dirname="TornadoVM-GraalJDK11"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-GraalJDK11"
     mkdir -p $dirname
     cd $dirname
     downloadGraalVMJDK11
@@ -354,8 +321,7 @@ function installForGraalJDK11() {
 }
 
 function installForGraalJDK17() {
-    checkPrerequisites
-    dirname="TornadoVM-GraalJDK17"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-GraalJDK17"
     mkdir -p $dirname
     cd $dirname
     downloadGraalVMJDK17
@@ -366,8 +332,7 @@ function installForGraalJDK17() {
 }
 
 function installForCorrettoJDK11() {
-    checkPrerequisites
-    dirname="TornadoVM-Amazon-Corretto11"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-Amazon-Corretto11"
     mkdir -p $dirname
     cd $dirname
     downloadCorretto11
@@ -378,8 +343,7 @@ function installForCorrettoJDK11() {
 }
 
 function installForCorrettoJDK17() {
-    checkPrerequisites
-    dirname="TornadoVM-Amazon-Corretto17"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-Amazon-Corretto17"
     mkdir -p $dirname
     cd $dirname
     downloadCorretto17
@@ -390,8 +354,7 @@ function installForCorrettoJDK17() {
 }
 
 function installForMandrelJDK11() {
-    checkPrerequisites
-    dirname="TornadoVM-RedHat-Mandrel11"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-RedHat-Mandrel11"
     mkdir -p $dirname
     cd $dirname
     downloadMandrel11
@@ -402,8 +365,7 @@ function installForMandrelJDK11() {
 }
 
 function installForMandrelJDK17() {
-    checkPrerequisites
-    dirname="TornadoVM-RedHat-Mandrel17"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-RedHat-Mandrel17"
     mkdir -p $dirname
     cd $dirname
     downloadMandrel17
@@ -413,24 +375,48 @@ function installForMandrelJDK17() {
     setupVariables $dirname
 }
 
-function installForWindowsJDK11() {
+function installForMicrosoftJDK11() {
     checkPrerequisites
-    dirname="TornadoVM-Windows-JDK11"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-Microsoft-JDK11"
     mkdir -p $dirname
     cd $dirname
-    downloadWindowsJDK11
+    downloadMicrosoftJDK11
     downloadCMake
     cd -
     setupTornadoVM jdk-11-plus
     setupVariables $dirname
 }
 
-function installForWindowsJDK17() {
+function installForMicrosoftJDK17() {
     checkPrerequisites
-    dirname="TornadoVM-Windows-JDK17"
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-Microsoft-JDK17"
     mkdir -p $dirname
     cd $dirname
-    downloadWindowsJDK17
+    downloadMicrosoftJDK17
+    downloadCMake
+    cd -
+    setupTornadoVM jdk-11-plus
+    setupVariables $dirname
+}
+
+function installForZuluJDK11() {
+    checkPrerequisites
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-Zulu-JDK11"
+    mkdir -p $dirname
+    cd $dirname
+    downloadZuluJDK11
+    downloadCMake
+    cd -
+    setupTornadoVM jdk-11-plus
+    setupVariables $dirname
+}
+
+function installForZuluJDK17() {
+    checkPrerequisites
+    dirname=${DIRECTORY_DEPENDENCIES}"/TornadoVM-Zulu-JDK17"
+    mkdir -p $dirname
+    cd $dirname
+    downloadZuluJDK17
     downloadCMake
     cd -
     setupTornadoVM jdk-11-plus
@@ -439,22 +425,26 @@ function installForWindowsJDK17() {
 
 function printHelp() {
     echo "TornadoVM installer for Linux and OSx"
-    echo "Usage:"
-    echo "       --jdk8           : Install TornadoVM with OpenJDK 8"
-    echo "       --jdk11          : Install TornadoVM with OpenJDK 11"
-    echo "       --jdk17          : Install TornadoVM with OpenJDK 17"
-    echo "       --graal-jdk-11   : Install TornadoVM with GraalVM and JDK 11 (GraalVM 21.3.0)"
-    echo "       --graal-jdk-17   : Install TornadoVM with GraalVM and JDK 17 (GraalVM 21.3.0)"
-    echo "       --corretto-11    : Install TornadoVM with Corretto JDK 11"
-    echo "       --corretto-17    : Install TornadoVM with Corretto JDK 17"
-    echo "       --mandrel-11     : Install TornadoVM with Mandrel 21.3.0 (JDK 11)"
-    echo "       --mandrel-17     : Install TornadoVM with Mandrel 21.3.0 (JDK 17)"
-    echo "       --windows-jdk-11 : Install TornadoVM with Windows JDK 11"
-    echo "       --windows-jdk-17 : Install TornadoVM with Windows JDK 17"
-    echo "       --opencl         : Install TornadoVM and build the OpenCL backend"
-    echo "       --ptx            : Install TornadoVM and build the PTX backend"
-    echo "       --spirv          : Install TornadoVM and build the SPIR-V backend"
-    echo "       --help           : Print this help"
+    echo "./scripts/tornadoVMInstaller.sh <JDK> <BACKENDS>"
+    echo "JDK (select one):"
+    echo "       --jdk11            : Install TornadoVM with OpenJDK 11"
+    echo "       --jdk17            : Install TornadoVM with OpenJDK 17"
+    echo "       --graal-jdk-11     : Install TornadoVM with GraalVM and JDK 11 (GraalVM 22.2.0)"
+    echo "       --graal-jdk-17     : Install TornadoVM with GraalVM and JDK 17 (GraalVM 22.2.0)"
+    echo "       --corretto-11      : Install TornadoVM with Corretto JDK 11"
+    echo "       --corretto-17      : Install TornadoVM with Corretto JDK 17"
+    echo "       --mandrel-11       : Install TornadoVM with Mandrel 22.2.0 (JDK 11)"
+    echo "       --mandrel-17       : Install TornadoVM with Mandrel 22.2.0 (JDK 17)"
+    echo "       --microsoft-jdk-11 : Install TornadoVM with Microsoft JDK 11"
+    echo "       --microsoft-jdk-17 : Install TornadoVM with Microsoft JDK 17"
+    echo "       --zulu-jdk-11      : Install TornadoVM with Azul Zulu JDK 11"
+    echo "       --zulu-jdk-17      : Install TornadoVM with Azul Zulu JDK 17"
+    echo "TornadoVM Backends:"
+    echo "       --opencl           : Install TornadoVM and build the OpenCL backend"
+    echo "       --ptx              : Install TornadoVM and build the PTX backend"
+    echo "       --spirv            : Install TornadoVM and build the SPIR-V backend"
+    echo "Help:"
+    echo "       --help             : Print this help"
     exit 0
 }
 
@@ -494,10 +484,6 @@ do
     printHelp
     shift
     ;;
-  --jdk8)
-    installForOpenJDK8
-    shift
-    ;;
   --jdk11)
     installForOpenJDK11
     shift
@@ -530,12 +516,20 @@ do
     installForMandrelJDK17
     shift
     ;;
-  --windows-jdk-11)
-    installForWindowsJDK11
+  --microsoft-jdk-11)
+    installForMicrosoftJDK11
     shift
     ;;
-  --windows-jdk-17)
-    installForWindowsJDK17
+  --microsoft-jdk-17)
+    installForMicrosoftJDK17
+    shift
+    ;;
+  --zulu-jdk-11)
+    installForZuluJDK11
+    shift
+    ;;
+  --zulu-jdk-17)
+    installForZuluJDK17
     shift
     ;;
   --opencl)

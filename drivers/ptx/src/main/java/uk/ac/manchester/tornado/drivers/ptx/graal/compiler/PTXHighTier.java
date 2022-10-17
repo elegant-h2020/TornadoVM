@@ -25,7 +25,6 @@
 package uk.ac.manchester.tornado.drivers.ptx.graal.compiler;
 
 import static org.graalvm.compiler.core.common.GraalOptions.ConditionalElimination;
-import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import static org.graalvm.compiler.core.common.GraalOptions.OptConvertDeoptsToGuards;
 import static org.graalvm.compiler.core.common.GraalOptions.PartialEscapeAnalysis;
 import static org.graalvm.compiler.core.phases.HighTier.Options.Inline;
@@ -35,12 +34,11 @@ import org.graalvm.compiler.loop.phases.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.loop.phases.LoopFullUnrollPhase;
 import org.graalvm.compiler.nodes.loop.DefaultLoopPolicies;
 import org.graalvm.compiler.nodes.loop.LoopPolicies;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
+import org.graalvm.compiler.phases.common.HighTierLoweringPhase;
 import org.graalvm.compiler.phases.common.IterativeConditionalEliminationPhase;
-import org.graalvm.compiler.phases.common.LoweringPhase;
 import org.graalvm.compiler.phases.common.RemoveValueProxyPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
@@ -64,12 +62,7 @@ import uk.ac.manchester.tornado.runtime.graal.phases.TornadoValueTypeCleanup;
 public class PTXHighTier extends TornadoHighTier {
 
     private CanonicalizerPhase createCanonicalizerPhase(OptionValues options, CanonicalizerPhase.CustomSimplification customCanonicalizer) {
-        CanonicalizerPhase canonicalizer;
-        if (ImmutableCode.getValue(options)) {
-            canonicalizer = CanonicalizerPhase.createWithoutReadCanonicalization();
-        } else {
-            canonicalizer = CanonicalizerPhase.create();
-        }
+        CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
         return canonicalizer.copyWithCustomSimplification(customCanonicalizer);
     }
 
@@ -103,7 +96,7 @@ public class PTXHighTier extends TornadoHighTier {
         appendPhase(new TornadoValueTypeCleanup());
 
         if (OptConvertDeoptsToGuards.getValue(options)) {
-            appendPhase(new ConvertDeoptimizeToGuardPhase());
+            appendPhase(new ConvertDeoptimizeToGuardPhase(canonicalizer));
         }
 
         appendPhase(new TornadoShapeAnalysis());
@@ -115,12 +108,12 @@ public class PTXHighTier extends TornadoHighTier {
         appendPhase(new LoopFullUnrollPhase(canonicalizer, loopPolicies));
 
         appendPhase(canonicalizer);
-        appendPhase(new RemoveValueProxyPhase());
+        appendPhase(new RemoveValueProxyPhase(canonicalizer));
         appendPhase(canonicalizer);
         appendPhase(new DeadCodeEliminationPhase(Optional));
 
         appendPhase(new SchedulePhase(SchedulePhase.SchedulingStrategy.EARLIEST));
-        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
+        appendPhase(new HighTierLoweringPhase(canonicalizer));
 
         // After the first Lowering, Tornado replaces reductions with snippets
         // that contains method calls to barriers.

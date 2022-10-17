@@ -10,7 +10,7 @@ This [document](17_AWS.md) shows a full guideline for running TornadoVM on Amazo
 ### Pre-requisites
 
 We have currently tested with an Intel Nallatech-A385 FPGA (Intel Arria 10 GT1150) and a Xilinx KCU1500 FPGA card.
-We have also tested it on the AWS EC2 F1 instance with `xilinx_aws-vu9p-f1-04261818_dynamic_5_0 device`.
+We have also tested it on the AWS EC2 F1 instance with `xilinx_aws-vu9p-f1-04261818_dynamic_5_0` device.
 
 * HLS Versions: Intel Quartus 17.1.0 Build 240, Xilinx SDAccel 2018.2, Xilinx SDAccel 2018.3, Xilinx Vitis 2020.2
 * TornadoVM Version: >= 0.9
@@ -41,14 +41,32 @@ $ clinfo
 
 ## Step 1: Update/Create the FPGA's configuration file
 
-Update the "etc/vendor_fpga.conf" file with the necessary information (i.e. fpga platform name (DEVICE_NAME), HLS compiler flags (FLAGS), HLS directory (DIRECTORY_BITSTREAM). TornadoVM will automatically load the user-defined configurations according to the vendor of the underlying FPGA device.  You can also run TornadoVM with your configuration file, by using the `-Dtornado.fpga.conf.file=FILE` flag.
+Update the "$TORNADO_SDK/etc/vendor-fpga.conf" file with the necessary information (i.e. fpga platform name (DEVICE_NAME), HLS compiler flags (FLAGS), HLS directory (DIRECTORY_BITSTREAM). TornadoVM will automatically load the user-defined configurations according to the vendor of the underlying FPGA device.  You can also run TornadoVM with your configuration file, by using the `-Dtornado.fpga.conf.file=FILE` flag.
+
+### Example of configuration file for Intel FPGAs (Emulation mode) with the [TornadoVM Docker image](https://github.com/beehive-lab/docker-tornado#intel-integrated-graphics):
+
+Edit/create the configuration file fo the FPGA:
+
+```bash
+$ vim $TORNADO_SDK/etc/intel-docker-fpga.conf
+```
+
+```conf
+# Configure the fields for FPGA compilation & execution
+# [device]
+DEVICE_NAME = fpga_fast_emu
+# [compiler]
+COMPILER = aocl-ioc64
+# [options]
+DIRECTORY_BITSTREAM = fpga-source-comp/ # Specify the directory
+```
 
 ### Example of configuration file for Intel Nallatech-A385 FPGA (Intel Arria 10 GT1150):
 
 Edit/create the configuration file fo the FPGA:
 
 ```bash
-$ vim etc/intel-fpga.conf
+$ vim $TORNADO_SDK/etc/intel-fpga.conf
 ```
 
 ```conf
@@ -65,7 +83,7 @@ DIRECTORY_BITSTREAM = fpga-source-comp/ # Specify the directory
 ### Example of configuration file for Xilinx KCU1500:
 
 ```bash
-$ vim etc/xilinx-fpga.conf
+$ vim $TORNADO_SDK/etc/xilinx-fpga.conf
 ```
 
 ```conf
@@ -110,7 +128,7 @@ source /opt/xilinx/xrt/setup.sh
 ### Example of configuration file for AWS xilinx_aws-vu9p-f1-04261818_dynamic_5_0:
 
 ```bash
-$ vim etc/xilinx-fpga.conf
+$ vim $TORNADO_SDK/etc/xilinx-fpga.conf
 ```
 
 ```conf
@@ -136,18 +154,13 @@ The compilation dumps along with the generated FPGA bitstream and the generated 
 Example:
 
 ```bash
-tornado \
-    -Ds0.t0.device=0:1 \
-    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 1024 normal 1
+tornado --jvm="-Ds0.t0.device=0:1" -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic --params="1024 normal 1"
 ```
 
-Note: The Full JIT mode on the Alveo U50 presents some constraints regarding the maximum allocated space on the device memory. Although the Xilinx driver reports 1GB as the maximum allocation space, the XRT layer throws an error (`[XRT] ERROR: std::bad_alloc`) when the heap size is larger than 64MB. This issue is reported to Xilinx, and it is anticipated to be fixed soon. For applications that do not require more than 64MB of heap size, the following flag can be used `-Dtornado.heap.allocation=64MB`.
+Note: The Full JIT mode on the Alveo U50 presents some constraints regarding the maximum allocated space on the device memory. Although the Xilinx driver reports 1GB as the maximum allocation space, the XRT layer throws an error (`[XRT] ERROR: std::bad_alloc`) when the heap size is larger than 64MB. This issue is reported to Xilinx, and it is anticipated to be fixed soon. For applications that do not require more than 64MB of heap size, the following flag can be used `-Dtornado.device.memory=64MB`.
 
 ```bash
-tornado \
-    -Ds0.t0.device=0:1 \
-    -Dtornado.heap.allocation=64MB \
-    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 1024 normal 1
+tornado --jvm="-Ds0.t0.device=0:1 -Dtornado.device.memory=64MB" -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic --params="1024 normal 1"
 ```
 
 ### 2. Ahead of Time Execution Mode
@@ -157,32 +170,49 @@ Ahead of time execution mode allows the user to use a pre-generated bitstream of
 Example:  
 
 ```bash
-tornado \
-    -Ds0.t0.device=0:1 \
-    -Ds0.t0.global.dims=1024 \
-    -Ds0.t0.local.dims=64 \
-    -Dtornado.precompiled.binary=/path/to/lookupBufferAddress,s0.t0.device=0:1 \
-    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 1024 normal 10
+tornado --jvm="-Ds0.t0.device=0:1 -Ds0.t0.global.dims=1024 -Ds0.t0.local.dims=64 \
+    -Dtornado.precompiled.binary=/path/to/lookupBufferAddress,s0.t0.device=0:1 "
+    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic \
+    --params="1024 normal 10"
 ```
 
-Note: The Ahead of Time mode on the Alveo U50 presents some constraints regarding the maximum allocated space on the device memory. Although the Xilinx driver reports 1GB as the maximum allocation space, the XRT layer throws an error (`[XRT] ERROR: std::bad_alloc`) when the heap size is larger than 64MB. This issue is reported to Xilinx, and it is anticipated to be fixed soon. For applications that do not require more than 64MB of heap size, the following flag can be used `-Dtornado.heap.allocation=64MB`.
+Note: The Ahead of Time mode on the Alveo U50 presents some constraints regarding the maximum allocated space on the device memory. Although the Xilinx driver reports 1GB as the maximum allocation space, the XRT layer throws an error (`[XRT] ERROR: std::bad_alloc`) when the heap size is larger than 64MB. This issue is reported to Xilinx, and it is anticipated to be fixed soon. For applications that do not require more than 64MB of heap size, the following flag can be used `-Dtornado.device.memory=64MB`.
 
 ```bash
-tornado \
-    -Ds0.t0.device=0:1 \
-    -Dtornado.heap.allocation=64MB \
-    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 1024 normal 1
+tornado --jvm="-Ds0.t0.device=0:1 -Dtornado.device.memory=64MB "\
+    -m tornadoexamples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic \
+    --params="1024 normal 1"
 ```
 
 ### 3. Emulation Mode
 
-Emulation mode can be used for fast-prototying and ensuring program functional correctness before going through the full JIT process (HLS).
+Emulation mode can be used for fast-prototyping and ensuring program functional correctness before going through the full JIT process (HLS).
 
 Before executing the TornadoVM program, the following steps needs to be executed based on the FPGA vendors' toolchain:  
 
 #### A) Emulation of an Intel platform:
 
-- Set the `CL_CONTEXT_EMULATOR_DEVICE_INTELFPGA` env variable to `1`, so as to enable the execution on the emulated device. 
+You can run in Emulation mode either by using a Docker container or locally:
+
+- Using a Docker Image:
+
+If you use a Docker image provided by [Intel OneAPI](https://hub.docker.com/r/intel/oneapi), please set up the following variable:
+```bash 
+$ export DOCKER_FPGA_EMULATION=1
+```
+In case you use the [TornadoVM Docker image](https://github.com/beehive-lab/docker-tornado#intel-integrated-graphics), this variable is configured by default.
+Therefore you can run the following example in which the FPGA device uses the identifier `1:0`.
+
+Example:
+```bash
+./run_intel_openjdk.sh tornado \
+    --jvm="-Ds0.t0.device=1:0 "
+    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic --params="1024 default 10"
+```
+
+- Local execution:
+
+Set the `CL_CONTEXT_EMULATOR_DEVICE_INTELFPGA` env variable to `1`, so as to enable the execution on the emulated device. 
 ```bash
 $ export CL_CONTEXT_EMULATOR_DEVICE_INTELFPGA=1
 ```
@@ -191,8 +221,9 @@ Example:
 
 ```bash
 env CL_CONTEXT_EMULATOR_DEVICE_INTELFPGA=1 tornado \
-    -Ds0.t0.device=0:1 \
-    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 1024 normal 10
+    --jvm="-Ds0.t0.device=0:1" \
+    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic \
+    --params="1024 normal 10"
 ```
 
 #### B) Emulation of a Xilinx platform (using Vitis):
@@ -211,8 +242,9 @@ Example:
 
 ```bash
 tornado \
-    -Ds0.t0.device=0:1 \
-    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 1024 normal 10
+    --jvm="-Ds0.t0.device=0:1" \
+    -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic \
+    --params="1024 normal 10"
 ```
 
 Note: The emulation mode through SDAccel results in wrong results. However when we run in the Full JIT or the Ahead of Time modes the kernels return correct results. 

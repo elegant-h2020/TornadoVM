@@ -577,7 +577,7 @@ public class OCLNodeLIRBuilder extends NodeLIRBuilder {
         if (keyCount == 0) {
             gen.emitJump(defaultTarget);
         } else {
-            Variable value = gen.load(operand(x.value()));
+            AllocatableValue value = gen.emitMove(operand(x.value()));
             if (keyCount == 1) {
                 assert defaultTarget != null;
                 unimplemented();
@@ -611,12 +611,12 @@ public class OCLNodeLIRBuilder extends NodeLIRBuilder {
     }
 
     protected void emitPrologue(final StructuredGraph graph, boolean isKernel) {
+        final Local[] locals = graph.method().getLocalVariableTable().getLocalsAt(0);
         if (isKernel) {
             for (final ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
-                setResult(param, getGen().getOCLGenTool().emitParameterLoad(param, param.index()));
+                setResult(param, getGen().getOCLGenTool().emitParameterLoad(locals[param.index()], param));
             }
         } else {
-            final Local[] locals = graph.method().getLocalVariableTable().getLocalsAt(0);
             for (final ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
                 LIRKind lirKind = getGen().getLIRKind(param.stamp(NodeView.DEFAULT));
                 setResult(param, new OCLNullary.Parameter(locals[param.index()].getName(), lirKind));

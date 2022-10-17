@@ -48,9 +48,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.graalvm.compiler.core.common.alloc.ComputeBlockOrder;
+import org.graalvm.compiler.core.common.alloc.LinearScanOrder;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
+import org.graalvm.compiler.core.common.cfg.CodeEmissionOrder;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugDumpScope;
@@ -77,6 +78,7 @@ import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import uk.ac.manchester.tornado.api.profiler.TornadoProfiler;
 import uk.ac.manchester.tornado.drivers.ptx.graal.PTXProviders;
 import uk.ac.manchester.tornado.drivers.ptx.graal.PTXSuitesProvider;
 import uk.ac.manchester.tornado.drivers.ptx.graal.backend.PTXBackend;
@@ -141,7 +143,7 @@ public class PTXCompiler {
             FrameMap frameMap = lirGenRes.getFrameMap();
             final PTXCompilationResultBuilder crb = r.backend.newCompilationResultBuilder(lirGenRes, frameMap, r.compilationResult, r.factory, r.isKernel, isParallel, r.includePrintf);
             crb.setPTXLIRGenerationResult((PTXLIRGenerationResult) lirGenRes);
-            r.backend.emitCode(crb, lirGenRes.getLIR(), r.installedCodeOwner);
+            r.backend.emitCode(crb, lirGenRes.getLIR(), r.installedCodeOwner, r.profiler);
 
             Assumptions assumptions = r.graph.getAssumptions();
             if (assumptions != null && !assumptions.isEmpty()) {
@@ -174,13 +176,10 @@ public class PTXCompiler {
             assert startBlock.getPredecessorCount() == 0;
 
             LIR lir = null;
-            AbstractBlockBase<?>[] codeEmittingOrder;
-            AbstractBlockBase<?>[] linearScanOrder;
             try (DebugContext.Scope s = getDebugContext().scope("ComputeLinearScanOrder", lir)) {
-                codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
-                linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
-
-                lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder, options, getDebugContext());
+                CodeEmissionOrder<?> blockOrder = r.backend.newBlockOrder(blocks.length, startBlock);
+                AbstractBlockBase<?>[] linearScanOrder = LinearScanOrder.computeLinearScanOrder(blocks.length, startBlock);
+                lir = new LIR(schedule.getCFG(), linearScanOrder, r.graph.getOptions(), r.graph.getDebug());
                 getDebugContext().dump(DebugContext.INFO_LEVEL, lir, "After linear scan order");
             } catch (Throwable e) {
                 throw getDebugContext().handle(e);
@@ -254,7 +253,7 @@ public class PTXCompiler {
         return graph.start().next() == null;
     }
 
-    public static PTXCompilationResult compileSketchForDevice(Sketch sketch, CompilableTask task, PTXProviders providers, PTXBackend backend) {
+    public static PTXCompilationResult compileSketchForDevice(Sketch sketch, CompilableTask task, PTXProviders providers, PTXBackend backend, TornadoProfiler profiler) {
         final StructuredGraph kernelGraph = (StructuredGraph) sketch.getGraph().getReadonlyCopy().copy(getDebugContext());
         ResolvedJavaMethod resolvedMethod = kernelGraph.method();
 
@@ -267,17 +266,33 @@ public class PTXCompiler {
         OptimisticOptimizations optimisticOpts = OptimisticOptimizations.ALL;
         ProfilingInfo profilingInfo = resolvedMethod.getProfilingInfo();
 
-        PTXCompilationResult kernelCompResult = new PTXCompilationResult(buildKernelName(resolvedMethod.getName(), task));
+        PTXCompilationResult kernelCompResult = new PTXCompilationResult(buildKernelName(resolvedMethod.getName(), task), taskMeta);
         CompilationResultBuilderFactory factory = CompilationResultBuilderFactory.Default;
 
         Set<ResolvedJavaMethod> methods = new HashSet<>();
         boolean includePrintf = kernelGraph.hasNode(PrintfNode.TYPE);
 
         final PTXSuitesProvider suitesProvider = (PTXSuitesProvider) providers.getSuitesProvider();
-        PTXCompilationRequest kernelCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance().withGraph(kernelGraph).withCodeOwner(resolvedMethod).withArgs(args)
-                .withMetaData(taskMeta).withProviders(providers).withBackend(backend).withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite()).withOptimizations(optimisticOpts)
-                .withProfilingInfo(profilingInfo).withSuites(suitesProvider.getSuites()).withLIRSuites(suitesProvider.getLIRSuites()).withResult(kernelCompResult).withResultBuilderFactory(factory)
-                .isKernel(true).buildGraph(true).includePrintf(includePrintf).withBatchThreads(batchThreads).build();
+        PTXCompilationRequest kernelCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance() //
+                .withGraph(kernelGraph)//
+                .withCodeOwner(resolvedMethod)//
+                .withArgs(args)//
+                .withMetaData(taskMeta)//
+                .withProviders(providers)//
+                .withBackend(backend)//
+                .withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite())//
+                .withOptimizations(optimisticOpts)//
+                .withProfilingInfo(profilingInfo)//
+                .withSuites(suitesProvider.getSuites())//
+                .withLIRSuites(suitesProvider.getLIRSuites())//
+                .withResult(kernelCompResult)//
+                .withResultBuilderFactory(factory)//
+                .isKernel(true)//
+                .buildGraph(true)//
+                .includePrintf(includePrintf)//
+                .withBatchThreads(batchThreads)//
+                .withProfiler(profiler) //
+                .build();
 
         kernelCompilationRequest.execute();
 
@@ -306,13 +321,28 @@ public class PTXCompiler {
                 nonInlinedCompiledMethods.add(currentMethod);
             }
             Sketch currentSketch = TornadoSketcher.lookup(currentMethod, task.meta().getDriverIndex(), task.meta().getDeviceIndex());
-            final PTXCompilationResult compResult = new PTXCompilationResult(currentMethod.getName());
+            final PTXCompilationResult compResult = new PTXCompilationResult(currentMethod.getName(), taskMeta);
             final StructuredGraph graph = (StructuredGraph) currentSketch.getGraph().getMutableCopy(null);
 
-            PTXCompilationRequest methodCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance().withGraph(graph).withCodeOwner(currentMethod).withProviders(providers)
-                    .withBackend(backend).withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite()).withOptimizations(optimisticOpts).withProfilingInfo(profilingInfo)
-                    .withSuites(suitesProvider.getSuites()).withLIRSuites(suitesProvider.getLIRSuites()).withResult(compResult).withResultBuilderFactory(factory).isKernel(false).buildGraph(false)
-                    .includePrintf(false).withBatchThreads(0).build();
+            // @formatter:off
+            PTXCompilationRequest methodCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance().withGraph(graph)
+                    .withCodeOwner(currentMethod)
+                    .withProviders(providers)
+                    .withBackend(backend)
+                    .withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite())
+                    .withOptimizations(optimisticOpts)
+                    .withProfilingInfo(profilingInfo)
+                    .withSuites(suitesProvider.getSuites())
+                    .withLIRSuites(suitesProvider.getLIRSuites())
+                    .withResult(compResult)
+                    .withResultBuilderFactory(factory)
+                    .isKernel(false)
+                    .buildGraph(false)
+                    .includePrintf(false)
+                    .withBatchThreads(0)
+                    .withProfiler(profiler)
+                    .build();
+            // @formatter:on
 
             methodCompilationRequest.execute();
             workList.addAll(compResult.getNonInlinedMethods());
@@ -353,7 +383,8 @@ public class PTXCompiler {
         return kernelCompResult;
     }
 
-    public static PTXCompilationResult compileCodeForDevice(ResolvedJavaMethod resolvedMethod, Object[] args, TaskMetaData meta, PTXProviders providers, PTXBackend backend, long batchThreads) {
+    public static PTXCompilationResult compileCodeForDevice(ResolvedJavaMethod resolvedMethod, Object[] args, TaskMetaData meta, PTXProviders providers, PTXBackend backend, long batchThreads,
+            TornadoProfiler profiler) {
         Tornado.info("Compiling %s on %s", resolvedMethod.getName(), backend.getDeviceContext().getDevice().getDeviceName());
         final TornadoCompilerIdentifier id = new TornadoCompilerIdentifier("compile-kernel" + resolvedMethod.getName(), compilationId.getAndIncrement());
 
@@ -367,14 +398,32 @@ public class PTXCompiler {
         OptimisticOptimizations optimisticOpts = OptimisticOptimizations.ALL;
         ProfilingInfo profilingInfo = resolvedMethod.getProfilingInfo();
 
-        PTXCompilationResult kernelCompResult = new PTXCompilationResult(resolvedMethod.getName());
+        PTXCompilationResult kernelCompResult = new PTXCompilationResult(resolvedMethod.getName(), meta);
         CompilationResultBuilderFactory factory = CompilationResultBuilderFactory.Default;
-
         final PTXSuitesProvider suitesProvider = (PTXSuitesProvider) providers.getSuitesProvider();
-        PTXCompilationRequest kernelCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance().withGraph(kernelGraph).withCodeOwner(resolvedMethod).withArgs(args)
-                .withMetaData(meta).withProviders(providers).withBackend(backend).withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite()).withOptimizations(optimisticOpts)
-                .withProfilingInfo(profilingInfo).withSuites(suitesProvider.getSuites()).withLIRSuites(suitesProvider.getLIRSuites()).withResult(kernelCompResult).withResultBuilderFactory(factory)
-                .isKernel(true).buildGraph(true).includePrintf(false).withBatchThreads(batchThreads).build();
+
+        // @formatter:off
+        PTXCompilationRequest kernelCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance()
+                .withGraph(kernelGraph)
+                .withCodeOwner(resolvedMethod)
+                .withArgs(args)
+                .withMetaData(meta)
+                .withProviders(providers)
+                .withBackend(backend)
+                .withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite())
+                .withOptimizations(optimisticOpts)
+                .withProfilingInfo(profilingInfo)
+                .withSuites(suitesProvider.getSuites())
+                .withLIRSuites(suitesProvider.getLIRSuites())
+                .withResult(kernelCompResult)
+                .withResultBuilderFactory(factory)
+                .isKernel(true)
+                .buildGraph(true)
+                .includePrintf(false)
+                .withBatchThreads(batchThreads)
+                .withProfiler(profiler)
+                .build();
+        // @formatter:on
 
         kernelCompilationRequest.execute();
 
@@ -382,17 +431,34 @@ public class PTXCompiler {
 
         while (!workList.isEmpty()) {
             final ResolvedJavaMethod currentMethod = workList.pop();
-            final PTXCompilationResult compResult = new PTXCompilationResult(currentMethod.getName());
+            final PTXCompilationResult compResult = new PTXCompilationResult(currentMethod.getName(), meta);
             StructuredGraph.Builder builder1 = new StructuredGraph.Builder(TornadoCoreRuntime.getOptions(), getDebugContext(), StructuredGraph.AllowAssumptions.YES);
             builder1.method(resolvedMethod);
             builder1.compilationId(id);
             builder1.name("internal" + currentMethod.getName());
 
             final StructuredGraph graph = builder.build();
-            PTXCompilationRequest methodCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance().withGraph(graph).withCodeOwner(currentMethod).withProviders(providers)
-                    .withBackend(backend).withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite()).withOptimizations(optimisticOpts).withProfilingInfo(profilingInfo)
-                    .withSuites(suitesProvider.getSuites()).withLIRSuites(suitesProvider.getLIRSuites()).withResult(compResult).withResultBuilderFactory(factory).isKernel(false).buildGraph(true)
-                    .includePrintf(false).withBatchThreads(0).build();
+
+            // @formatter:off
+            PTXCompilationRequest methodCompilationRequest = PTXCompilationRequest.PTXCompilationRequestBuilder.getInstance()
+                    .withGraph(graph)
+                    .withCodeOwner(currentMethod)
+                    .withProviders(providers)
+                    .withBackend(backend)
+                    .withGraphBuilderSuite(suitesProvider.getGraphBuilderSuite())
+                    .withOptimizations(optimisticOpts)
+                    .withProfilingInfo(profilingInfo)
+                    .withSuites(suitesProvider.getSuites())
+                    .withLIRSuites(suitesProvider.getLIRSuites())
+                    .withResult(compResult)
+                    .withResultBuilderFactory(factory)
+                    .isKernel(false)
+                    .buildGraph(true)
+                    .includePrintf(false)
+                    .withBatchThreads(0)
+                    .withProfiler(profiler)
+                    .build();
+            // @formatter:on
 
             methodCompilationRequest.execute();
             workList.addAll(compResult.getNonInlinedMethods());
@@ -423,10 +489,12 @@ public class PTXCompiler {
         public final boolean buildGraph;
         public final long batchThreads;
         public final boolean includePrintf;
+        private final TornadoProfiler profiler;
 
         private PTXCompilationRequest(StructuredGraph graph, ResolvedJavaMethod installedCodeOwner, Object[] args, TaskMetaData meta, Providers providers, PTXBackend backend,
                 PhaseSuite<HighTierContext> graphBuilderSuite, OptimisticOptimizations optimisticOpts, ProfilingInfo profilingInfo, TornadoSuites suites, TornadoLIRSuites lirSuites,
-                PTXCompilationResult compilationResult, CompilationResultBuilderFactory factory, boolean isKernel, boolean buildGraph, long batchThreads, boolean includePrintf) {
+                PTXCompilationResult compilationResult, CompilationResultBuilderFactory factory, boolean isKernel, boolean buildGraph, long batchThreads, boolean includePrintf,
+                TornadoProfiler profiler) {
             this.graph = graph;
             this.installedCodeOwner = installedCodeOwner;
             this.args = args;
@@ -444,6 +512,7 @@ public class PTXCompiler {
             this.buildGraph = buildGraph;
             this.batchThreads = batchThreads;
             this.includePrintf = includePrintf;
+            this.profiler = profiler;
         }
 
         public PTXCompilationResult execute() {
@@ -470,6 +539,8 @@ public class PTXCompiler {
             private long batchThreads;
             private boolean includePrintf;
 
+            private TornadoProfiler profiler;
+
             private PTXCompilationRequestBuilder() {
             }
 
@@ -479,7 +550,7 @@ public class PTXCompiler {
 
             public PTXCompilationRequest build() {
                 return new PTXCompilationRequest(graph, codeOwner, args, meta, providers, backend, graphBuilderSuite, optimisticOpts, profilingInfo, suites, lirSuites, compilationResult, factory,
-                        isKernel, buildGraph, batchThreads, includePrintf);
+                        isKernel, buildGraph, batchThreads, includePrintf, profiler);
             }
 
             public PTXCompilationRequestBuilder withGraph(StructuredGraph graph) {
@@ -539,6 +610,11 @@ public class PTXCompiler {
 
             public PTXCompilationRequestBuilder withResult(PTXCompilationResult result) {
                 this.compilationResult = result;
+                return this;
+            }
+
+            public PTXCompilationRequestBuilder withProfiler(TornadoProfiler profiler) {
+                this.profiler = profiler;
                 return this;
             }
 

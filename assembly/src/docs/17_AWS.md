@@ -36,6 +36,8 @@ a. Enter a bash shell as root.
 $ sudo -E /bin/bash
 ```
 
+**Note: If you face a failure regarding the generation of IP, try the patch [here](https://support.xilinx.com/s/article/76960?language=en_US).**
+
 b. Load the environment variables for Xilinx HLS and runtime.
 
 ```bash
@@ -51,10 +53,10 @@ $ tornado --devices
 ```
 ### 3. Update the the FPGA Conguration file
 
-Update the `etc/xilinx_fpga.conf` file or create your own (e.g. `etc/aws_fpga.conf`), and append the necessary information (i.e. FPGA plarform name (DEVICE_NAME), HLS compiler flags (FLAGS), HLS directory (DIRECTORY_BITSTREAM), and AWS S3 configuration (s3_bucket, s3_dcp_key and s3_loogs_key)).
+Update the `$TORNADO_SDK/etc/xilinx-fpga.conf` file or create your own (e.g. `$TORNADO_SDK/etc/aws-fpga.conf`), and append the necessary information (i.e. FPGA plarform name (DEVICE_NAME), HLS compiler flags (FLAGS), HLS directory (DIRECTORY_BITSTREAM), and AWS S3 configuration (s3_bucket, s3_dcp_key and s3_loogs_key)).
 
 ```bash
-$ vim etc/aws_fpga.conf
+$ vim $TORNADO_SDK/etc/aws-fpga.conf
 ```
 
 ## Example of configuration file:
@@ -73,14 +75,14 @@ AWS_S3_BUCKET = tornadovm-fpga-bucket
 AWS_S3_DCP_KEY = outputfolder
 AWS_S3_LOGS_KEY = logfolder
 ```
-You can run TornadoVM with your configuration file, by using the `-Dtornado.fpga.conf.file=FILE` flag. If this flag is not used, the default configuration file is the `etc/xilinx-fpga.conf`.
+You can run TornadoVM with your configuration file, by using the `-Dtornado.fpga.conf.file=FILE` flag. If this flag is not used, the default configuration file is the `$TORNADO_SDK/etc/xilinx-fpga.conf`.
 
 ### 4. Run a program that offloads a task on the FPGA. 
 ![image](https://user-images.githubusercontent.com/34061419/120612886-519ac700-c45e-11eb-9d6f-45f2aed99d7f.png)
 
-The following example uses a custom configuration file (`aws_fpga.conf`) to execute the DFT on the AWS F1 FPGA:
+The following example uses a custom configuration file (`aws-fpga.conf`) to execute the DFT on the AWS F1 FPGA:
 ```bash
-$ tornado -Ds0.t0.device=0:0 -Dtornado.fpga.conf.file=/home/centos/TornadoVM/etc/aws_fpga.conf --debug -Xmx20g -Xms20g --printKernel uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 256 default 1 >> output.log
+$ tornado --jvm "-Ds0.t0.device=0:0 -Dtornado.fpga.conf.file=/home/centos/TornadoVM/etc/aws-fpga.conf -Xmx20g -Xms20g" --printKernel --threadInfo -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic --params="256 default 1" >> output.log
 $ Ctrl-Z (^Z)
 $ bg
 $ disown
@@ -139,42 +141,29 @@ When the state change from `pending` to `available`, the `awsxlcbin` binary code
 If you have logged out, ensure that you run (Steps 2 and 4).
 
 ```bash
-$ tornado -Ds0.t0.device=0:0 -Dtornado.fpga.conf.file=/home/centos/TornadoVM/etc/aws_fpga.conf --debug -Xmx20g -Xms20g --printKernel uk.ac.manchester.tornado.examples.dynamic.DFTDynamic 256 default 1 >> output.log
+$ tornado --jvm="-Ds0.t0.device=0:0 -Dtornado.fpga.conf.file=/home/centos/TornadoVM/etc/aws-fpga.conf -Xmx20g -Xms20g" --debug --printKernel -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic --params="256 default 1" >> output.log
 ```
 
 The result is the following:
 
-```OpenCL
-__kernel void lookupBufferAddress(__global uchar *_heap_base, ulong _frame_base, __constant uchar *_constant_region, __local uchar *_local_region, __global int *_atomics)
+```bash
+tornado --jvm="-Ds0.t0.device=0:0 -Dtornado.fpga.conf.file=/home/centos/TornadoVM-Internal-feat-removeBufferCache/etc/aws-fpga.conf --threadInfo -Xmx20g -Xms20g" --printKernel -m tornado.examples/uk.ac.manchester.tornado.examples.dynamic.DFTDynamic --parms "256 default 1"
+Initialization time:  705795966 ns
+```
+```c
+__attribute__((reqd_work_group_size(64, 1, 1)))
+__kernel void computeDft(__global long *_kernel_context, __constant uchar *_constant_region, __local uchar *_local_region, __global int *_atomics, __global uchar *inreal, __global uchar *inimag, __global uchar *outreal, __global uchar *outimag, __global uchar *inputSize)
 {
-
-  __global ulong *_frame = (__global ulong *) &_heap_base[_frame_base];
-
+  int i_8, i_29, i_35, i_5, i_4, i_36; 
+  float f_6, f_7, f_24, f_25, f_26, f_27, f_28, f_16, f_17, f_18, f_19, f_20, f_21, f_22, f_23, f_13, f_15; 
+  ulong ul_12, ul_3, ul_2, ul_34, ul_14, ul_1, ul_33, ul_0; 
+  long l_9, l_10, l_11, l_30, l_31, l_32; 
 
   // BLOCK 0
-  _frame[0]  =  (ulong) _heap_base;
-}  //  kernel
-
-Initialization time:  1124900370 ns
-
-[DEBUG] JIT compilation for the FPGA
-Warning: -Dtornado.opencl.userelative was set to False. TornadoVM changed it to True because it is required for FPGA execution.
-__attribute__((reqd_work_group_size(64,1,1)))
-__kernel void computeDft(__global uchar *_heap_base, ulong _frame_base, __constant uchar *_constant_region, __local uchar *_local_region, __global int *_atomics)
-{
-  ulong ul_3, ul_2, ul_34, ul_1, ul_33, ul_0, ul_14, ul_12; 
-  float f_13, f_18, f_17, f_16, f_15, f_22, f_21, f_20, f_19, f_26, f_25, f_24, f_23, f_28, f_27, f_6, f_7; 
-  int i_29, i_4, i_36, i_5, i_35, i_8; 
-  long l_32, l_31, l_30, l_11, l_10, l_9; 
-
-  __global ulong *_frame = (__global ulong *) &_heap_base[_frame_base];
-
-
-  // BLOCK 0
-  ul_0  =  (ulong) _frame[3];
-  ul_1  =  (ulong) _frame[4];
-  ul_2  =  (ulong) _frame[5];
-  ul_3  =  (ulong) _frame[6];
+  ul_0  =  (ulong) inreal;
+  ul_1  =  (ulong) inimag;
+  ul_2  =  (ulong) outreal;
+  ul_3  =  (ulong) outimag;
   i_4  =  get_global_id(0);
   // BLOCK 1 MERGES [0 5 ]
   i_5  =  i_4;
@@ -183,23 +172,24 @@ __kernel void computeDft(__global uchar *_heap_base, ulong _frame_base, __consta
   f_6  =  0.0F;
   f_7  =  0.0F;
   i_8  =  0;
-  #pragma unroll 4
-  for(;i_8 < 256;)  {
+  __attribute__((xcl_pipeline_loop(1)))
+  for(;i_8 < 256;)
+  {
     // BLOCK 4
     l_9  =  (long) i_8;
     l_10  =  l_9 << 2;
     l_11  =  l_10 + 24L;
     ul_12  =  ul_0 + l_11;
-    f_13  =  *((__global float *) &_heap_base[ul_12]);
+    f_13  =  *((__global float *) ul_12);
     ul_14  =  ul_1 + l_11;
-    f_15  =  *((__global float *) &_heap_base[ul_14]);
+    f_15  =  *((__global float *) ul_14);
     f_16  =  (float) i_8;
     f_17  =  f_16 * 6.2831855F;
     f_18  =  (float) i_5;
     f_19  =  f_17 * f_18;
     f_20  =  f_19 / 256.0F;
-    f_21  =  sin(f_20);
-    f_22  =  cos(f_20);
+    f_21  =  native_sin(f_20);
+    f_22  =  native_cos(f_20);
     f_23  =  f_22 * f_15;
     f_24  =  fma(f_21, f_13, f_23);
     f_25  =  f_7 - f_24;
@@ -216,9 +206,9 @@ __kernel void computeDft(__global uchar *_heap_base, ulong _frame_base, __consta
   l_31  =  l_30 << 2;
   l_32  =  l_31 + 24L;
   ul_33  =  ul_2 + l_32;
-  *((__global float *) &_heap_base[ul_33])  =  f_6;
+  *((__global float *) ul_33)  =  f_6;
   ul_34  =  ul_3 + l_32;
-  *((__global float *) &_heap_base[ul_34])  =  f_7;
+  *((__global float *) ul_34)  =  f_7;
   i_35  =  get_global_size(0);
   i_36  =  i_35 + i_5;
   i_5  =  i_36;
@@ -227,7 +217,7 @@ __kernel void computeDft(__global uchar *_heap_base, ulong _frame_base, __consta
 }  //  kernel
 
 Task info: s0.t0
-	Backend           : OpenCL
+	Backend           : OPENCL
 	Device            : xilinx_aws-vu9p-f1_shell-v04261818_201920_2 CL_DEVICE_TYPE_ACCELERATOR (available)
 	Dims              : 1
 	Global work offset: [0]
@@ -235,7 +225,7 @@ Task info: s0.t0
 	Local  work size  : [64, 1, 1]
 	Number of workgroups  : [4]
 
-Total time:  3562826315 ns 
+Total time:  4532676526 ns 
 
 Is valid?: true
 

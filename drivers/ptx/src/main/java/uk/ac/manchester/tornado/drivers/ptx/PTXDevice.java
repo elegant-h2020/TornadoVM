@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2020, APT Group, Department of Computer Science,
+ * Copyright (c) 2020-2022 APT Group, Department of Computer Science,
  * School of Engineering, The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -23,11 +23,11 @@
  */
 package uk.ac.manchester.tornado.drivers.ptx;
 
+import java.nio.ByteOrder;
+
 import uk.ac.manchester.tornado.api.TornadoTargetDevice;
 import uk.ac.manchester.tornado.api.enums.TornadoDeviceType;
 import uk.ac.manchester.tornado.drivers.ptx.enums.PTXDeviceAttribute;
-
-import java.nio.ByteOrder;
 
 public class PTXDevice implements TornadoTargetDevice {
 
@@ -47,6 +47,7 @@ public class PTXDevice implements TornadoTargetDevice {
     private final long totalDeviceMemory;
     private final long constantBufferSize;
     private final long maxAllocationSize;
+    private int maxThreadsPerBlock;
 
     public PTXDevice(int deviceIndex) {
         this.deviceIndex = deviceIndex;
@@ -59,6 +60,7 @@ public class PTXDevice implements TornadoTargetDevice {
         maxFrequency = cuDeviceGetAttribute(cuDevice, PTXDeviceAttribute.CLOCK_RATE.value());
         maxWorkItemSizes = initMaxWorkItemSizes();
         maxGridSizes = initMaxGridSizes();
+        maxThreadsPerBlock = cuDeviceGetAttribute(cuDevice, PTXDeviceAttribute.MAX_THREADS_PER_BLOCK.value());
         ptxVersion = CUDAVersion.getMaxPTXVersion(cuDriverGetVersion());
         computeCapability = initComputeCapability();
         targetArchitecture = ptxVersion.getArchitecture(computeCapability);
@@ -69,17 +71,17 @@ public class PTXDevice implements TornadoTargetDevice {
         maxAllocationSize = cuMemGetInfo();
     }
 
-    private native static long cuDeviceGet(int deviceId);
+    private static native long cuDeviceGet(int deviceId);
 
-    private native static String cuDeviceGetName(long cuDevice);
+    private static native String cuDeviceGetName(long cuDevice);
 
-    private native static int cuDeviceGetAttribute(long cuDevice, int attribute);
+    private static native int cuDeviceGetAttribute(long cuDevice, int attribute);
 
-    private native static long cuDeviceTotalMem(long cuDevice);
+    private static native long cuDeviceTotalMem(long cuDevice);
 
-    private native static long cuMemGetInfo();
+    private static native long cuMemGetInfo();
 
-    private native static int cuDriverGetVersion();
+    private static native int cuDriverGetVersion();
 
     @Override
     public String getDeviceName() {
@@ -135,6 +137,11 @@ public class PTXDevice implements TornadoTargetDevice {
     @Override
     public long[] getDeviceMaxWorkGroupSize() {
         return maxGridSizes;
+    }
+
+    @Override
+    public int getMaxThreadsPerBlock() {
+        return maxThreadsPerBlock;
     }
 
     @Override
