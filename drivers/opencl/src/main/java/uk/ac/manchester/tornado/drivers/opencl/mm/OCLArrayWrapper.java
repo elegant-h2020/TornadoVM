@@ -43,6 +43,7 @@ import uk.ac.manchester.tornado.api.exceptions.TornadoRuntimeException;
 import uk.ac.manchester.tornado.api.mm.ObjectBuffer;
 import uk.ac.manchester.tornado.drivers.opencl.OCLDeviceContext;
 import uk.ac.manchester.tornado.runtime.common.Tornado;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 
 public abstract class OCLArrayWrapper<T> implements ObjectBuffer {
 
@@ -68,8 +69,13 @@ public abstract class OCLArrayWrapper<T> implements ObjectBuffer {
         this.bufferSize = INIT_VALUE;
         this.bufferOffset = 0;
 
-        arrayLengthOffset = getVMConfig().arrayOopDescLengthOffset();
-        arrayHeaderSize = getVMConfig().getArrayBaseOffset(kind);
+        if (TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            arrayLengthOffset = 0;
+            arrayHeaderSize = 0;
+        } else {
+            arrayLengthOffset = getVMConfig().arrayOopDescLengthOffset();
+            arrayHeaderSize = getVMConfig().getArrayBaseOffset(kind);
+        }
     }
 
     protected OCLArrayWrapper(final T array, final OCLDeviceContext device, final JavaKind kind, long batchSize) {
@@ -107,8 +113,7 @@ public abstract class OCLArrayWrapper<T> implements ObjectBuffer {
         this.bufferId = deviceContext.getBufferProvider().getBufferWithSize(bufferSize);
 
         if (Tornado.FULL_DEBUG) {
-            info("allocated: array kind=%s, size=%s, length offset=%d, header size=%d", kind.getJavaName(), humanReadableByteCount(bufferSize, true), arrayLengthOffset,
-                    arrayHeaderSize);
+            info("allocated: array kind=%s, size=%s, length offset=%d, header size=%d", kind.getJavaName(), humanReadableByteCount(bufferSize, true), arrayLengthOffset, arrayHeaderSize);
             info("allocated: %s", toString());
         }
 
@@ -123,8 +128,7 @@ public abstract class OCLArrayWrapper<T> implements ObjectBuffer {
         bufferSize = INIT_VALUE;
 
         if (Tornado.FULL_DEBUG) {
-            info("deallocated: array kind=%s, size=%s, length offset=%d, header size=%d", kind.getJavaName(), humanReadableByteCount(bufferSize, true), arrayLengthOffset,
-                    arrayHeaderSize);
+            info("deallocated: array kind=%s, size=%s, length offset=%d, header size=%d", kind.getJavaName(), humanReadableByteCount(bufferSize, true), arrayLengthOffset, arrayHeaderSize);
             info("deallocated: %s", toString());
         }
     }
@@ -201,14 +205,16 @@ public abstract class OCLArrayWrapper<T> implements ObjectBuffer {
         // We first write the header for the object, and then we write actual
         // buffer
         final int headerEvent;
-        if (batchSize <= 0) {
-            headerEvent = buildArrayHeader(Array.getLength(array)).enqueueWrite((useDeps) ? events : null);
-        } else {
-            headerEvent = buildArrayHeaderBatch(batchSize).enqueueWrite((useDeps) ? events : null);
+        if (!TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            if (batchSize <= 0) {
+                headerEvent = buildArrayHeader(Array.getLength(array)).enqueueWrite((useDeps) ? events : null);
+            } else {
+                headerEvent = buildArrayHeaderBatch(batchSize).enqueueWrite((useDeps) ? events : null);
+            }
+            listEvents.add(headerEvent);
         }
         returnEvent = enqueueWriteArrayData(toBuffer(), arrayHeaderSize + bufferOffset, bufferSize - arrayHeaderSize, array, hostOffset, (useDeps) ? events : null);
 
-        listEvents.add(headerEvent);
         listEvents.add(returnEvent);
         return useDeps ? listEvents : null;
     }
@@ -341,7 +347,9 @@ public abstract class OCLArrayWrapper<T> implements ObjectBuffer {
         if (array == null) {
             throw new TornadoRuntimeException("[ERROR] data is NULL");
         }
-        buildArrayHeader(Array.getLength(array)).write();
+        if (!TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            buildArrayHeader(Array.getLength(array)).write();
+        }
         // TODO: Writing with offset != 0
         writeArrayData(toBuffer(), arrayHeaderSize + bufferOffset, bufferSize - arrayHeaderSize, array, 0, null);
     }
