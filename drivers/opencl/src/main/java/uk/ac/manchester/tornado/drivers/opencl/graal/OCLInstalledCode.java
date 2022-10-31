@@ -158,11 +158,13 @@ public class OCLInstalledCode extends InstalledCode implements TornadoInstalledC
             index++;
         }
 
-        // kernel context
-        buffer.clear();
-        buffer.putLong(kernelArgs.toBuffer());
-        kernel.setArg(index, buffer);
-        index++;
+        if (!TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            // kernel context
+            buffer.clear();
+            buffer.putLong(kernelArgs.toBuffer());
+            kernel.setArg(index, buffer);
+            index++;
+        }
 
         if (isSPIRVBinary) {
             // Set the rest of the SPIR-V kernel arguments.
@@ -188,30 +190,32 @@ public class OCLInstalledCode extends InstalledCode implements TornadoInstalledC
             return;
         }
 
-        // constant memory
-        if (meta != null && meta.getConstantSize() > 0) {
-            kernel.setArg(index, ByteBuffer.wrap(meta.getConstantData()));
-        } else {
+        if (!TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            // constant memory
+            if (meta != null && meta.getConstantSize() > 0) {
+                kernel.setArg(index, ByteBuffer.wrap(meta.getConstantData()));
+            } else {
+                buffer.clear();
+                buffer.putLong(kernelArgs.toConstantAddress());
+                kernel.setArg(index, buffer);
+            }
+            index++;
+
+            // local memory
+            if (meta != null && meta.getLocalSize() > 0) {
+                info("\tallocating %s of local memory", RuntimeUtilities.humanReadableByteCount(meta.getLocalSize(), true));
+                kernel.setLocalRegion(index, meta.getLocalSize());
+            } else {
+                kernel.setArgUnused(index);
+            }
+            index++;
+
+            // Atomics in Global Memory
             buffer.clear();
-            buffer.putLong(kernelArgs.toConstantAddress());
+            buffer.putLong(kernelArgs.toAtomicAddress());
             kernel.setArg(index, buffer);
+            index++;
         }
-        index++;
-
-        // local memory
-        if (meta != null && meta.getLocalSize() > 0) {
-            info("\tallocating %s of local memory", RuntimeUtilities.humanReadableByteCount(meta.getLocalSize(), true));
-            kernel.setLocalRegion(index, meta.getLocalSize());
-        } else {
-            kernel.setArgUnused(index);
-        }
-        index++;
-
-        // Atomics in Global Memory
-        buffer.clear();
-        buffer.putLong(kernelArgs.toAtomicAddress());
-        kernel.setArg(index, buffer);
-        index++;
 
         // Parameters
         for (int i = 0, argIndex = 0; i < kernelArgs.getCallArguments().size(); i++) {
