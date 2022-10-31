@@ -61,6 +61,7 @@ import uk.ac.manchester.tornado.api.exceptions.TornadoBailoutRuntimeException;
 import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.OCLKernelContextAccessNode;
 import uk.ac.manchester.tornado.runtime.common.RuntimeUtilities;
 import uk.ac.manchester.tornado.runtime.common.Tornado;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 import uk.ac.manchester.tornado.runtime.graal.nodes.ParallelRangeNode;
 import uk.ac.manchester.tornado.runtime.graal.phases.TornadoHighTierContext;
 import uk.ac.manchester.tornado.runtime.graal.phases.TornadoLoopUnroller;
@@ -285,7 +286,7 @@ public class TornadoTaskSpecialisation extends BasePhase<TornadoHighTierContext>
                 OCLKernelContextAccessNode kernelContextAccessNode = graph.addOrUnique(new OCLKernelContextAccessNode(constantValue));
                 parameterNode.replaceAtUsages(kernelContextAccessNode);
                 index++;
-            } else {
+            } else if (!TornadoOptions.CODE_INTEROPERABILITY_MODE) {
                 ConstantNode constant = createConstantFromObject(args[parameterNode.index()]);
                 graph.addWithoutUnique(constant);
                 parameterNode.replaceAtUsages(constant);
