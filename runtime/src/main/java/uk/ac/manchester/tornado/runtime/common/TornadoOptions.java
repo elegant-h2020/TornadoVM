@@ -226,6 +226,12 @@ public class TornadoOptions {
     public static StringBuilder FPGA_BINARIES = System.getProperty("tornado.precompiled.binary", null) != null ? new StringBuilder(System.getProperty("tornado.precompiled.binary", null)) : null;
 
     /**
+     * It disables the replacement of parameters that are constants with a constant
+     * value. False by default.
+     */
+    public static final boolean CODE_INTEROPERABILITY_MODE = getBooleanValue("tornado.cim.mode", FALSE);
+
+    /**
      * Option to enable profiler. It can be disabled at any point during runtime.
      *
      * @return boolean.
