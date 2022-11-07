@@ -106,7 +106,6 @@ import uk.ac.manchester.tornado.drivers.opencl.graal.lir.OCLKind;
 import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.FPGAWorkGroupSizeNode;
 import uk.ac.manchester.tornado.runtime.TornadoCoreRuntime;
 import uk.ac.manchester.tornado.runtime.common.TornadoAcceleratorDevice;
-import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 import uk.ac.manchester.tornado.runtime.graal.backend.TornadoBackend;
 import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
 
@@ -365,8 +364,8 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
         }
     }
 
-    private void emitComma(OCLAssembler asm) {
-        if (TornadoOptions.CODE_INTEROPERABILITY_MODE && this.isFirstParameter) {
+    private void emitCommaInPrologue(OCLAssembler asm) {
+        if (architecture.abiRegisters.length == 0 && this.isFirstParameter) {
             this.isFirstParameter = false;
         } else {
             asm.emit(", ");
@@ -381,7 +380,7 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
                 if (locals[i].getType().getJavaKind().isPrimitive()) {
                     final AllocatableValue param = incomingArguments.getArgument(i);
                     OCLKind kind = (OCLKind) param.getPlatformKind();
-                    emitComma(asm);
+                    emitCommaInPrologue(asm);
                     asm.emit("__private %s %s", kind.toString(), locals[i].getName());
                 } else {
                     // Skip the kernel context object
@@ -392,7 +391,7 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
                     if (locals[i].getType().toJavaName().equals(AtomicInteger.class.getName())) {
                         continue;
                     }
-                    emitComma(asm);
+                    emitCommaInPrologue(asm);
                     asm.emit("__global %s *%s", "uchar", locals[i].getName());
                 }
             } else {
@@ -405,7 +404,7 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
                     }
                 }
                 guarantee(oclKind != OCLKind.ILLEGAL, "illegal type for %s", param.getPlatformKind());
-                emitComma(asm);
+                emitCommaInPrologue(asm);
                 asm.emit("%s %s", oclKind.toString(), locals[i].getName());
             }
         }
