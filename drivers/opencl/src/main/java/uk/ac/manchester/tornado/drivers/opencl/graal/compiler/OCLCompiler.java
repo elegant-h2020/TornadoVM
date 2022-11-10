@@ -408,21 +408,21 @@ public class OCLCompiler {
         final Set<ResolvedJavaMethod> nonInlinedCompiledMethods = new HashSet<>();
         final Deque<ResolvedJavaMethod> workList = new ArrayDeque<>(kernelCompResult.getNonInlinedMethods());
         while (!workList.isEmpty()) {
-            final ResolvedJavaMethod currentMethod = workList.pop();
-            if (nonInlinedCompiledMethods.contains(currentMethod)) {
+            final ResolvedJavaMethod nonInlinedMethod = workList.pop();
+            if (nonInlinedCompiledMethods.contains(nonInlinedMethod)) {
                 continue;
             } else {
-                nonInlinedCompiledMethods.add(currentMethod);
+                nonInlinedCompiledMethods.add(nonInlinedMethod);
             }
-            Sketch currentSketch = TornadoSketcher.lookup(currentMethod, task.meta().getDriverIndex(), task.meta().getDeviceIndex());
+            Sketch currentSketch = TornadoSketcher.lookup(nonInlinedMethod, task.meta().getDriverIndex(), task.meta().getDeviceIndex());
             final StructuredGraph graph = (StructuredGraph) currentSketch.getGraph().getMutableCopy(null);
 
-            String subKernelName = OCLDeviceContext.checkKernelName(currentMethod.getName());
+            String subKernelName = OCLDeviceContext.checkKernelName(nonInlinedMethod.getName());
             final OCLCompilationResult compResult = new OCLCompilationResult(task.getId(), subKernelName, taskMeta, backend);
 
-            final Object[] argsOfNonInlinedMethod = RuntimeReflectionUtils.resolveUnboxedArgsOfNonInlinedMethodFromCallerArgs(currentMethod, args);
+            final Object[] argsOfNonInlinedMethod = RuntimeReflectionUtils.resolveUnboxedArgsOfNonInlinedMethodFromCallerArgs(nonInlinedMethod, args);
 
-            Request<OCLCompilationResult> methodCompilationRequest = new Request<>(graph, currentMethod, //
+            Request<OCLCompilationResult> methodCompilationRequest = new Request<>(graph, nonInlinedMethod, //
                     argsOfNonInlinedMethod, null, providers, backend, suitesProvider.getGraphBuilderSuite(), //
                     optimisticOpts, profilingInfo, suitesProvider.getSuites(), suitesProvider.getLIRSuites(), //
                     compResult, factory, false, false, 0, profiler);
