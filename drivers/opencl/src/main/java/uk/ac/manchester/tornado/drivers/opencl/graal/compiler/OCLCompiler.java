@@ -84,6 +84,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.TriState;
 import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.api.profiler.TornadoProfiler;
+import uk.ac.manchester.tornado.drivers.common.graal.compiler.RuntimeReflectionUtils;
 import uk.ac.manchester.tornado.drivers.opencl.OCLDeviceContext;
 import uk.ac.manchester.tornado.drivers.opencl.OCLTargetDescription;
 import uk.ac.manchester.tornado.drivers.opencl.graal.OCLProviders;
@@ -419,8 +420,10 @@ public class OCLCompiler {
             String subKernelName = OCLDeviceContext.checkKernelName(currentMethod.getName());
             final OCLCompilationResult compResult = new OCLCompilationResult(task.getId(), subKernelName, taskMeta, backend);
 
+            final Object[] argsOfNonInlinedMethod = RuntimeReflectionUtils.resolveUnboxedArgsOfNonInlinedMethodFromCallerArgs(currentMethod, args);
+
             Request<OCLCompilationResult> methodCompilationRequest = new Request<>(graph, currentMethod, //
-                    args, null, providers, backend, suitesProvider.getGraphBuilderSuite(), //
+                    argsOfNonInlinedMethod, null, providers, backend, suitesProvider.getGraphBuilderSuite(), //
                     optimisticOpts, profilingInfo, suitesProvider.getSuites(), suitesProvider.getLIRSuites(), //
                     compResult, factory, false, false, 0, profiler);
 
