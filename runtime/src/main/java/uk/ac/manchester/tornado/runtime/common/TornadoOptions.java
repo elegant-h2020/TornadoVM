@@ -232,6 +232,16 @@ public class TornadoOptions {
     public static final boolean CODE_INTEROPERABILITY_MODE = getBooleanValue("tornado.cim.mode", FALSE);
 
     /**
+     * It passes a method body to the Acceleration service.
+     */
+    public static final String METHOD_PATH_FOR_SERVICE = Tornado.getProperty("tornado.method.path", "etc/method.java");
+
+    /**
+     * It passes a directory where the boilerplate code will be stored.
+     */
+    public static final String SERVICE_DESTINATION_DIR = Tornado.getProperty("tornado.service.destination.dir", "/tmp/");
+
+    /**
      * Option to enable profiler. It can be disabled at any point during runtime.
      *
      * @return boolean.
