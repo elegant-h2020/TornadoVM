@@ -13,7 +13,7 @@ import static uk.ac.manchester.tornado.runtime.common.TornadoOptions.SERVICE_DES
 
 public class Boilerplate {
     private static final String SUFFIX = ".java";
-    private static String classContent;
+    private static StringBuilder stringBuilder;
     private static String signatureOfMethod;
     private static String methodBody;
     private static int numberOfArguments;
@@ -27,91 +27,120 @@ public class Boilerplate {
     private static String methodName;
     private static String className = "Test";
 
+    private static void emitPackagePrologue(StringBuilder sb) {
+        sb.append("package uk.ac.manchester.tornado.examples.virtual;\n" + "\n" //
+                + "import uk.ac.manchester.tornado.api.TaskSchedule;\n" //
+                + "import uk.ac.manchester.tornado.api.annotations.Parallel;\n" //
+                + "import uk.ac.manchester.tornado.api.annotations.Reduce;\n" //
+                + "import java.util.stream.IntStream;");
+        sb.append("\n");
+    }
+
+    private static void emitClassBegin(StringBuilder sb) {
+        sb.append("\n");
+        sb.append("public class ");
+        sb.append(className);
+        sb.append(" {");
+        sb.append("\n");
+    }
+
+    private static void emitSizesOfParameters(StringBuilder sb) {
+        sb.append("\n");
+        for (int i = 0; i < numberOfArrayArguments; i++) {
+            arrayOfSizeVariables[i] = arrayOfParameterNames[i] + "Size";
+            sb.append("private static int ");
+            sb.append(arrayOfSizeVariables[i]);
+            sb.append(" = ");
+            sb.append(arrayOfParameterSizes[i]);
+            sb.append(";\n");
+        }
+        sb.append("\n");
+    }
+
+    private static void emitMethod(StringBuilder sb, String method) {
+        sb.append("\n");
+        sb.append(method);
+    }
+
+    private static void emitMainMethod(StringBuilder sb) {
+        sb.append("\n");
+        sb.append("public static void main(String[] args) {");
+        sb.append("\n");
+    }
+
+    private static void emitDeclarationOfParameters(StringBuilder sb) {
+        sb.append("\n");
+        for (int i = 0; i < numberOfArguments; i++) {
+            sb.append("    ");
+            sb.append(arrayOfParameterTypes[i]);
+            sb.append(" ");
+            sb.append(arrayOfParameterNames[i]);
+            sb.append(" = new ");
+            sb.append(arrayOfParameterTypes[i].replaceFirst("\\]", ""));
+            sb.append(arrayOfSizeVariables[i]);
+            sb.append("];\n");
+        }
+        sb.append("\n");
+    }
+
+    private static void emitInitializationOfParameters(StringBuilder sb) {
+        sb.append("\n");
+        for (int i = 0; i < numberOfArrayArguments; i++) {
+            sb.append("    ");
+            sb.append("IntStream.range(0, ");
+            sb.append(arrayOfSizeVariables[i]);
+            sb.append(").forEach(idx -> {\n");
+            sb.append("        ");
+            sb.append(arrayOfParameterNames[i]);
+            sb.append("[idx] = (");
+            sb.append(arrayOfParameterTypes[i].replaceAll("\\[|\\]", ""));
+            sb.append(") idx;");
+            sb.append("\n");
+            sb.append("    ");
+            sb.append("});\n");
+        }
+    }
+
+    private static void emitTaskSchedule(StringBuilder sb) {
+        sb.append("\n");
+        //@formatter:off
+        sb.append("    ");
+        sb.append("new TaskSchedule(\"virtual\")");
+        sb.append("\n");
+        sb.append("        ");
+        sb.append(".task(\"");
+        sb.append(methodName);
+        sb.append("\", ");
+        sb.append(className);
+        sb.append("::");
+        sb.append(methodName);
+        for (int i = 0; i < numberOfArguments; i++) {
+            sb.append(", ");
+            sb.append(arrayOfParameterNames[i]);
+        }
+        sb.append(")\n");
+        sb.append("        ");
+        sb.append(".execute();\n");
+        //@formatter:on
+        sb.append("\n");
+    }
+
+    private static void emitClosingBraceForMainMethod(StringBuilder sb) {
+        sb.append("    }");
+        sb.append("\n");
+    }
+
+    private static void emitClosingBraceForClass(StringBuilder sb) {
+        sb.append("}");
+        sb.append("\n");
+    }
+
     private static String extractMethodFromFileToString(String path) {
         try {
             return Files.readString(Path.of(path));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private static void emitPackagePrologue() {
-        classContent = "package uk.ac.manchester.tornado.examples.virtual;\n" + "\n" //
-                + "import uk.ac.manchester.tornado.api.TaskSchedule;\n" //
-                + "import uk.ac.manchester.tornado.api.annotations.Parallel;\n" //
-                + "import uk.ac.manchester.tornado.api.annotations.Reduce;\n" //
-                + "import java.util.stream.IntStream;";
-        classContent += "\n";
-    }
-
-    private static void emitClassBegin() {
-        classContent += "\n";
-        classContent += "public class " + className + " {";
-        classContent += "\n";
-    }
-
-    private static void emitSizesOfParameters() {
-        classContent += "\n";
-        for (int i = 0; i < numberOfArrayArguments; i++) {
-            arrayOfSizeVariables[i] = arrayOfParameterNames[i] + "Size";
-            classContent += "private static int " + arrayOfSizeVariables[i] + " = " + arrayOfParameterSizes[i] + ";\n";
-        }
-        classContent += "\n";
-    }
-
-    private static void emitMethod(String method) {
-        classContent += "\n";
-        classContent += method;
-    }
-
-    private static void emitMainMethod() {
-        classContent += "\n";
-        classContent += "public static void main(String[] args) {";
-        classContent += "\n";
-    }
-
-    private static void emitDeclarationOfParameters() {
-        classContent += "\n";
-        for (int i = 0; i < numberOfArguments; i++) {
-            classContent += "    " + arrayOfParameterTypes[i] + " " + arrayOfParameterNames[i] + " = new " + arrayOfParameterTypes[i].replaceFirst("\\]", "") + arrayOfSizeVariables[i] + "];\n";
-        }
-        classContent += "\n";
-    }
-
-    private static void emitInitializationOfParameters() {
-        classContent += "\n";
-        for (int i = 0; i < numberOfArrayArguments; i++) {
-            classContent += "    " + "IntStream.range(0, " + arrayOfSizeVariables[i] + ").forEach(idx -> {\n";
-            classContent += "        " + arrayOfParameterNames[i] + "[idx] = (";
-            classContent += arrayOfParameterTypes[i].replaceAll("\\[|\\]", "") + ") idx;" + "\n";
-            classContent += "    " + "});\n";
-        }
-    }
-
-    private static void emitTaskSchedule() {
-        classContent += "\n";
-        //@formatter:off
-        classContent += "    " + "new TaskSchedule(\"virtual\")" + "\n";
-//        classContent += "    " + ".streamIn(" + input+")\n";
-        classContent += "        " + ".task(\"" + methodName + "\", " + className +"::" + methodName;
-        for (int i = 0; i < numberOfArguments; i++) {
-            classContent += ", " + arrayOfParameterNames[i];
-        }
-        classContent += ")\n";
-//        classContent += "        " + ".streamOut(" + result ")\n";
-        classContent += "        " + ".execute();\n";
-        //@formatter:on
-        classContent += "\n";
-    }
-
-    private static void emitClosingBraceForMainMethod() {
-        classContent += "    }";
-        classContent += "\n";
-    }
-
-    private static void emitClosingBraceForClass() {
-        classContent += "}";
-        classContent += "\n";
     }
 
     private static String extractSignature(String line) {
@@ -181,12 +210,12 @@ public class Boilerplate {
             line = bufferedReader.readLine();
             signatureOfMethod = extractSignature(line);
         } catch (IOException e) {
-            System.out.println("Input fileName [" + fileName + "] failed to run." + e.getMessage());
+            System.err.println("Input fileName [" + fileName + "] failed to run." + e.getMessage());
         }
         return signatureOfMethod;
     }
 
-    private static String writeClassToFile(String fileName) {
+    private static void writeClassToFile(String classContent, String fileName) {
         FileWriter fileWriter;
         BufferedWriter bufferedWriter;
         try {
@@ -195,22 +224,23 @@ public class Boilerplate {
             bufferedWriter.append(classContent);
             bufferedWriter.close();
         } catch (IOException e) {
-            System.out.println("Error in writing of the generated class to file [" + fileName + "]." + e.getMessage());
+            System.err.println("Error in writing of the generated class to file [" + fileName + "]." + e.getMessage());
         }
-        return signatureOfMethod;
     }
 
-    private static void generateBoilerplaceCode() {
-        emitPackagePrologue();
-        emitClassBegin();
-        emitSizesOfParameters();
-        emitMethod(methodBody);
-        emitMainMethod();
-        emitDeclarationOfParameters();
-        emitInitializationOfParameters();
-        emitTaskSchedule();
-        emitClosingBraceForMainMethod();
-        emitClosingBraceForClass();
+    private static String generateBoilerplateCode() {
+        stringBuilder = new StringBuilder();
+        emitPackagePrologue(stringBuilder);
+        emitClassBegin(stringBuilder);
+        emitSizesOfParameters(stringBuilder);
+        emitMethod(stringBuilder, methodBody);
+        emitMainMethod(stringBuilder);
+        emitDeclarationOfParameters(stringBuilder);
+        emitInitializationOfParameters(stringBuilder);
+        emitTaskSchedule(stringBuilder);
+        emitClosingBraceForMainMethod(stringBuilder);
+        emitClosingBraceForClass(stringBuilder);
+        return stringBuilder.toString();
     }
 
     private static void initializeConfigurations(String filePath) {
@@ -230,12 +260,10 @@ public class Boilerplate {
 
     public static void main(String[] args) {
 
-        String filePath = METHOD_PATH_FOR_SERVICE;
+        initializeConfigurations(METHOD_PATH_FOR_SERVICE);
 
-        initializeConfigurations(filePath);
+        String classContent = generateBoilerplateCode();
 
-        generateBoilerplaceCode();
-
-        writeClassToFile(SERVICE_DESTINATION_DIR + className + SUFFIX);
+        writeClassToFile(classContent, SERVICE_DESTINATION_DIR + className + SUFFIX);
     }
 }
