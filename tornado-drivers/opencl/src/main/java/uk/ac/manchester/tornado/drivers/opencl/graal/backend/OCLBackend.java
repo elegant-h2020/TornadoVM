@@ -119,6 +119,7 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
     final OCLDeviceContextInterface deviceContext;
     final OCLCodeProvider codeCache;
     private boolean backEndInitialized;
+    private boolean isFirstParameter = true;
 
     public OCLBackend(OptionValues options, Providers providers, OCLTargetDescription target, OCLCodeProvider codeCache, OCLDeviceContextInterface deviceContext) {
         super(providers);
@@ -363,6 +364,14 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
         }
     }
 
+    private void emitCommaInPrologue(OCLAssembler asm) {
+        if (architecture.abiRegisters.length == 0 && this.isFirstParameter) {
+            this.isFirstParameter = false;
+        } else {
+            asm.emit(", ");
+        }
+    }
+
     private void emitMethodParameters(OCLAssembler asm, ResolvedJavaMethod method, CallingConvention incomingArguments, boolean isKernel) {
         final Local[] locals = method.getLocalVariableTable().getLocalsAt(0);
 
@@ -371,7 +380,7 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
                 if (locals[i].getType().getJavaKind().isPrimitive()) {
                     final AllocatableValue param = incomingArguments.getArgument(i);
                     OCLKind kind = (OCLKind) param.getPlatformKind();
-                    asm.emit(", ");
+                    emitCommaInPrologue(asm);
                     asm.emit("__private %s %s", kind.toString(), locals[i].getName());
                 } else {
                     // Skip the kernel context object
@@ -382,7 +391,7 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
                     if (locals[i].getType().toJavaName().equals(AtomicInteger.class.getName())) {
                         continue;
                     }
-                    asm.emit(", ");
+                    emitCommaInPrologue(asm);
                     asm.emit("__global %s *%s", "uchar", locals[i].getName());
                 }
             } else {
@@ -395,10 +404,11 @@ public class OCLBackend extends TornadoBackend<OCLProviders> implements FrameMap
                     }
                 }
                 guarantee(oclKind != OCLKind.ILLEGAL, "illegal type for %s", param.getPlatformKind());
-                asm.emit(", ");
+                emitCommaInPrologue(asm);
                 asm.emit("%s %s", oclKind.toString(), locals[i].getName());
             }
         }
+        this.isFirstParameter = true;
     }
 
     @Override

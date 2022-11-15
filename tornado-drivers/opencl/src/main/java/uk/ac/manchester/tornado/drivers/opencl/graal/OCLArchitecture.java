@@ -44,6 +44,7 @@ import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.drivers.common.architecture.ArchitectureRegister;
 import uk.ac.manchester.tornado.drivers.opencl.graal.lir.OCLKind;
 import uk.ac.manchester.tornado.drivers.opencl.graal.meta.OCLMemorySpace;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 
 public class OCLArchitecture extends Architecture {
 
@@ -59,7 +60,11 @@ public class OCLArchitecture extends Architecture {
 
     public OCLArchitecture(final OCLKind wordKind, final ByteOrder byteOrder) {
         super("Tornado OpenCL", wordKind, byteOrder, false, null, LOAD_STORE | STORE_STORE, 0, 0);
-        abiRegisters = new OCLRegister[] { kernelContext, constantSpace, localSpace, atomicSpace };
+        if (TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            abiRegisters = new OCLRegister[] {};
+        } else {
+            abiRegisters = new OCLRegister[] { kernelContext, constantSpace, localSpace, atomicSpace };
+        }
     }
 
     @Override

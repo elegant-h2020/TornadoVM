@@ -420,7 +420,7 @@ public class OCLCompiler {
             final OCLCompilationResult compResult = new OCLCompilationResult(task.getId(), subKernelName, taskMeta, backend);
 
             Request<OCLCompilationResult> methodCompilationRequest = new Request<>(graph, currentMethod, //
-                    null, null, providers, backend, suitesProvider.getGraphBuilderSuite(), //
+                    args, null, providers, backend, suitesProvider.getGraphBuilderSuite(), //
                     optimisticOpts, profilingInfo, suitesProvider.getSuites(), suitesProvider.getLIRSuites(), //
                     compResult, factory, false, false, 0, profiler);
 

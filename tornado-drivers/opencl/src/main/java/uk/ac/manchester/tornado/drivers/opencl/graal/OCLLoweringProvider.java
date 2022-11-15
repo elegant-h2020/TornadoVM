@@ -106,6 +106,7 @@ import uk.ac.manchester.tornado.drivers.opencl.graal.nodes.calc.DivNode;
 import uk.ac.manchester.tornado.drivers.opencl.graal.snippets.ReduceCPUSnippets;
 import uk.ac.manchester.tornado.drivers.opencl.graal.snippets.ReduceGPUSnippets;
 import uk.ac.manchester.tornado.runtime.TornadoVMConfig;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 import uk.ac.manchester.tornado.runtime.graal.nodes.GetGroupIdFixedWithNextNode;
 import uk.ac.manchester.tornado.runtime.graal.nodes.GlobalGroupSizeFixedWithNextNode;
 import uk.ac.manchester.tornado.runtime.graal.nodes.LocalGroupSizeFixedWithNextNode;
@@ -533,6 +534,18 @@ public class OCLLoweringProvider extends DefaultJavaLoweringProvider {
         HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) f;
         JavaConstant base = constantReflection.asJavaClass(field.getDeclaringClass());
         return ConstantNode.forConstant(base, metaAccess, graph);
+    }
+
+    /**
+     * This method is overridden to enable the replacement of read and write address
+     * nodes with addresses that do not offset the bytes of the Object headers.
+     *
+     * @return AddressNode
+     */
+    @Override
+    public AddressNode createArrayAddress(StructuredGraph graph, ValueNode array, JavaKind arrayKind, JavaKind elementKind, ValueNode index) {
+        int base = (TornadoOptions.CODE_INTEROPERABILITY_MODE) ? 0 : metaAccess.getArrayBaseOffset(arrayKind);
+        return createArrayAddress(graph, array, base, elementKind, index);
     }
 
     private AddressNode createArrayLocalAddress(StructuredGraph graph, ValueNode array, ValueNode index) {

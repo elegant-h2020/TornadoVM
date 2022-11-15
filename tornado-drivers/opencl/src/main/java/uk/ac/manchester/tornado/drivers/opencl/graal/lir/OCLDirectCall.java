@@ -36,6 +36,7 @@ import uk.ac.manchester.tornado.drivers.opencl.graal.OCLArchitecture;
 import uk.ac.manchester.tornado.drivers.opencl.graal.OCLUtils;
 import uk.ac.manchester.tornado.drivers.opencl.graal.asm.OCLAssembler;
 import uk.ac.manchester.tornado.drivers.opencl.graal.compiler.OCLCompilationResultBuilder;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 
 public class OCLDirectCall extends OCLLIROp {
 
@@ -63,7 +64,9 @@ public class OCLDirectCall extends OCLLIROp {
         asm.emit("(");
         int paramCounter = 0;
         asm.emit(((OCLArchitecture) crb.target.arch).getCallingConvention());
-        asm.emit(", ");
+        if (!TornadoOptions.CODE_INTEROPERABILITY_MODE) { // TODO Fix for callee methods
+            asm.emit(", ");
+        }
         for (Value param : parameters) {
             asm.emit(asm.toString(param));
             if (paramCounter < parameters.length - 1) {
