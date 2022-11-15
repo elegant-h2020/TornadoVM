@@ -33,9 +33,11 @@ import uk.ac.manchester.tornado.drivers.opencl.runtime.OCLTornadoDevice;
 import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualDeviceDescriptor;
 import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualJSONParser;
 import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualOCLPlatform;
+import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualOCLTornadoDevice;
 import uk.ac.manchester.tornado.runtime.common.KernelArgs;
 import uk.ac.manchester.tornado.runtime.common.DeviceObjectState;
 import uk.ac.manchester.tornado.runtime.common.Tornado;
+import uk.ac.manchester.tornado.runtime.common.TornadoAcceleratorDevice;
 import uk.ac.manchester.tornado.runtime.tasks.GlobalObjectState;
 import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
 
@@ -148,6 +150,12 @@ public class OpenCL {
         final int platformIndex = Integer.parseInt(Tornado.getProperty("tornado.opencl.platform", "0"));
         final int deviceIndex = Integer.parseInt(Tornado.getProperty("tornado.opencl.device", "0"));
         return new OCLTornadoDevice(platformIndex, deviceIndex);
+    }
+
+    public static VirtualOCLTornadoDevice getDefaultVirtualDevice() {
+        final int platformIndex = Integer.parseInt(Tornado.getProperty("tornado.opencl.platform", "0"));
+        final int deviceIndex = Integer.parseInt(Tornado.getProperty("tornado.opencl.device", "0"));
+        return new VirtualOCLTornadoDevice(platformIndex, deviceIndex);
     }
 
     /**
