@@ -25,6 +25,7 @@
  */
 package uk.ac.manchester.tornado.drivers.opencl.service.frontend;
 
+import java.io.File;
 import java.lang.reflect.Method;
 
 import org.graalvm.compiler.phases.util.Providers;
@@ -42,6 +43,7 @@ import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualOCLTornadoDevice;
 import uk.ac.manchester.tornado.runtime.TornadoCoreRuntime;
 import uk.ac.manchester.tornado.runtime.common.RuntimeUtilities;
 import uk.ac.manchester.tornado.runtime.common.TornadoAcceleratorDevice;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 import uk.ac.manchester.tornado.runtime.graal.compiler.TornadoSuitesProvider;
 import uk.ac.manchester.tornado.runtime.profiler.EmptyProfiler;
 import uk.ac.manchester.tornado.runtime.sketcher.Sketch;
@@ -153,7 +155,6 @@ public class TestFrontEnd {
     }
 
     public void test(String[] args) {
-        byte[] sourceCode;
 
         StringBuilder deviceInfoBuffer = new StringBuilder().append("\n");
         final int numDrivers = TornadoCoreRuntime.getTornadoRuntime().getNumDrivers();
@@ -165,18 +166,18 @@ public class TestFrontEnd {
         System.out.println(tornadoDevice.getDescription());
 
         if (args.length != 0) {
+            File file = new File(TornadoOptions.INPUT_CLASSFILE_DIR);
             Class klass = null;
             try {
-                klass = Class.forName("TestClass");
+                klass = Class.forName(file.getName().split("\\.")[0]); //
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException(e);
             }
-            sourceCode = compileMethod(klass, args[0], tornadoDevice);
+            byte[] sourceCode = compileMethod(klass, args[0], tornadoDevice);
+            RuntimeUtilities.maybePrintSource(sourceCode);
         } else {
-            sourceCode = compileMethod(TestVectorAdd.class, "vectorAdd", tornadoDevice);
+            System.out.println("Please pass the method name as parameter.");
         }
-
-        RuntimeUtilities.maybePrintSource(sourceCode);
     }
 
     public static void main(String[] args) {

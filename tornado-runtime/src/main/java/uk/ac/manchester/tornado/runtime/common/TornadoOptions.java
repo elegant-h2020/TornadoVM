@@ -244,6 +244,8 @@ public class TornadoOptions {
      */
     public static final boolean CODE_INTEROPERABILITY_MODE = getBooleanValue("tornado.cim.mode", FALSE);
 
+    public static final String INPUT_CLASSFILE_DIR = Tornado.getProperty("tornado.input.classfile.dir", null);
+
     /**
      * Option to enable profiler. It can be disabled at any point during runtime.
      *
