@@ -26,7 +26,6 @@
 package uk.ac.manchester.tornado.drivers.opencl.service.frontend;
 
 import java.lang.reflect.Method;
-import java.util.Arrays;
 
 import org.graalvm.compiler.phases.util.Providers;
 
@@ -98,10 +97,20 @@ public class TestFrontEnd {
         switch (type.getTypeName()) {
             case "int[]":
                 return new int[128];
+            case "long[]":
+                return new long[128];
             case "float[]":
                 return new float[128];
             case "double[]":
                 return new double[128];
+            case "int":
+                return Integer.valueOf(0);
+            case "long":
+                return Long.valueOf(0);
+            case "float":
+                return Float.valueOf(0.0f);
+            case "double":
+                return Double.valueOf(0.0f);
             default:
                 return null;
         }
@@ -144,15 +153,7 @@ public class TestFrontEnd {
     }
 
     public void test(String[] args) {
-
-        // input data
-        final int N = 128;
-        int[] a = new int[N];
-        int[] b = new int[N];
-        double[] c = new double[N];
-
-        Arrays.fill(a, -10);
-        Arrays.fill(b, 10);
+        byte[] sourceCode;
 
         StringBuilder deviceInfoBuffer = new StringBuilder().append("\n");
         final int numDrivers = TornadoCoreRuntime.getTornadoRuntime().getNumDrivers();
@@ -163,7 +164,17 @@ public class TestFrontEnd {
         VirtualOCLTornadoDevice tornadoDevice = OpenCL.getDefaultVirtualDevice();
         System.out.println(tornadoDevice.getDescription());
 
-        byte[] sourceCode = compileMethod(TestFrontEnd.class, "methodToCompile", tornadoDevice);
+        if (args.length != 0) {
+            Class klass = null;
+            try {
+                klass = Class.forName("TestClass");
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+            sourceCode = compileMethod(klass, args[0], tornadoDevice);
+        } else {
+            sourceCode = compileMethod(TestVectorAdd.class, "vectorAdd", tornadoDevice);
+        }
 
         RuntimeUtilities.maybePrintSource(sourceCode);
     }
