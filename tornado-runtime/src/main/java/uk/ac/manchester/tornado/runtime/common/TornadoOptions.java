@@ -246,6 +246,8 @@ public class TornadoOptions {
 
     public static final String INPUT_CLASSFILE_DIR = Tornado.getProperty("tornado.input.classfile.dir", null);
 
+    public static final String PARAMETER_SIZE_DIR = Tornado.getProperty("tornado.parameter.size.dir", null);
+
     /**
      * Option to enable profiler. It can be disabled at any point during runtime.
      *

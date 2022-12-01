@@ -25,13 +25,8 @@
  */
 package uk.ac.manchester.tornado.drivers.opencl.service.frontend;
 
-import java.io.File;
-import java.lang.reflect.Method;
-
-import org.graalvm.compiler.phases.util.Providers;
-
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import uk.ac.manchester.tornado.api.annotations.Parallel;
+import org.graalvm.compiler.phases.util.Providers;
 import uk.ac.manchester.tornado.drivers.common.CompilerUtil;
 import uk.ac.manchester.tornado.drivers.opencl.OCLDriver;
 import uk.ac.manchester.tornado.drivers.opencl.OpenCL;
@@ -51,60 +46,65 @@ import uk.ac.manchester.tornado.runtime.tasks.CompilableTask;
 import uk.ac.manchester.tornado.runtime.tasks.meta.ScheduleMetaData;
 import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.StringTokenizer;
+
 /**
  * Test the front end of the service.
  *
  */
 public class TestFrontEnd {
 
-    public static final int SIZE = 128;
-
-    public static void methodToCompile(int[] a, int[] b, double[] c, int alpha) {
-        for (@Parallel int i = 0; i < SIZE; i++) {
-            c[i] = 0.12 * a[i] * b[i] + alpha;
-        }
-    }
+    private static int numberOfArgsPassed;
+    private static int numberOfArgsFromSignature;
+    private static int argSizesIndex = 0;
+    private static String[] argNames;
 
     private static Class[] getMethodTypesFromClass(Class<?> klass, String methodName) {
         try {
             Method[] methods = klass.getMethods();
             for (int i = 0; i < methods.length; i++) {
                 if (methods[i].getName().equals(methodName)) {
-                    System.out.println("method[" + i + "]: " + methods[i].getName());
                     Class[] types = methods[i].getParameterTypes();
+                    numberOfArgsFromSignature = types.length;
                     return types;
                 }
             }
         } catch (SecurityException | IllegalArgumentException e) {
             throw new RuntimeException("[ERROR] Load class failed.", e);
         }
-        return null;
+        throw new RuntimeException("No method found in the class file.");
     }
 
-    private static Object[] resolveParametersFromTypes(Class[] types) {
+    private void checkParameterSizes() {
+        if (numberOfArgsPassed != numberOfArgsFromSignature) {
+            throw new RuntimeException("The number of parameters passed in JSON are not the same as the number of boxed types in the method.");
+        }
+    }
+
+    private static Object[] resolveParametersFromTypes(Class[] types, int[] parameterSizes) {
         Object[] args = new Object[types.length];
         for (int i = 0; i < types.length; i++) {
-            args[i] = lookupBoxedTypes(types[i]);
-            System.out.println("args[" + i + "]: " + args[i]);
+            args[i] = lookupBoxedTypes(types[i], parameterSizes);
         }
         return args;
     }
 
-    private static Object lookupBoxedTypes(Class type) {
-        System.out.println("type.getName(): " + type.getName());
-        System.out.println("type.getTypeName(): " + type.getTypeName());
-        System.out.println("type.getSimpleName(): " + type.getSimpleName());
-        System.out.println("type.getCanonicalName(): " + type.getCanonicalName());
-
+    private static Object lookupBoxedTypes(Class type, int[] parameterSizes) {
         switch (type.getTypeName()) {
             case "int[]":
-                return new int[128];
+                return new int[parameterSizes[argSizesIndex++]];
             case "long[]":
-                return new long[128];
+                return new long[parameterSizes[argSizesIndex++]];
             case "float[]":
-                return new float[128];
+                return new float[parameterSizes[argSizesIndex++]];
             case "double[]":
-                return new double[128];
+                return new double[parameterSizes[argSizesIndex++]];
             case "int":
                 return Integer.valueOf(0);
             case "long":
@@ -119,7 +119,7 @@ public class TestFrontEnd {
 
     }
 
-    public byte[] compileMethod(Class<?> klass, String methodName, TornadoAcceleratorDevice tornadoDevice) {
+    public byte[] compileMethod(Class<?> klass, String methodName, TornadoAcceleratorDevice tornadoDevice, int[] parameterSizes) {
 
         // Get the method object to be compiled
         Method methodToCompile = CompilerUtil.getMethodForName(klass, methodName);
@@ -137,7 +137,8 @@ public class TestFrontEnd {
         ScheduleMetaData scheduleMetaData = new ScheduleMetaData("s0");
         // Create a compilable task
         Class[] types = getMethodTypesFromClass(klass, methodName);
-        Object[] parameters = resolveParametersFromTypes(types);
+        checkParameterSizes();
+        Object[] parameters = resolveParametersFromTypes(types, parameterSizes);
 
         CompilableTask compilableTask = new CompilableTask(scheduleMetaData, "t0", methodToCompile, parameters);
         TaskMetaData taskMeta = compilableTask.meta();
@@ -154,6 +155,70 @@ public class TestFrontEnd {
         return compilationResult.getTargetCode();
     }
 
+    private Class readClassFromFile(File classFile) {
+        if (!classFile.exists()) {
+            throw new RuntimeException(classFile + " does not exist.");
+        }
+        Class klass = null;
+        try {
+            klass = Class.forName(classFile.getName().split("\\.")[0]); //
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+        return klass;
+    }
+
+    private String trimComma(String string) {
+        return string.replaceFirst("\\,", "");
+    }
+
+    private int[] readArgSizesFromFile(File parameterSizeFile) {
+        if (!parameterSizeFile.exists()) {
+            throw new RuntimeException(parameterSizeFile + " does not exist.");
+        }
+        FileReader fileReader;
+        BufferedReader bufferedReader;
+        ArrayList<String> parsedArgNames = new ArrayList<>();
+        ArrayList<Integer> parsedArgSizes = new ArrayList<>();
+
+        try {
+            fileReader = new FileReader(parameterSizeFile);
+            bufferedReader = new BufferedReader(fileReader);
+            String line;
+
+            while ((line = bufferedReader.readLine()) != null) {
+                StringTokenizer tokenizer = new StringTokenizer(line, " :");
+                while (tokenizer.hasMoreElements()) {
+                    int numberOfTokensInLine = tokenizer.countTokens();
+                    String token = tokenizer.nextToken();
+                    if (token.contains("{") || token.contains("}")) {
+                        break;
+                    }
+                    if (numberOfTokensInLine == 2) {
+                        parsedArgNames.add(token);
+                        parsedArgSizes.add(Integer.parseInt(trimComma(tokenizer.nextToken())));
+                    }
+                    numberOfArgsPassed++;
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Wrong parameter size file or invalid settings.");
+        }
+
+        if (numberOfArgsPassed > 0) {
+            argNames = new String[numberOfArgsPassed];
+            int[] argSizes = new int[numberOfArgsPassed];
+
+            for (int i = 0; i < argSizes.length; i++) {
+                argNames[i] = parsedArgNames.get(i);
+                argSizes[i] = parsedArgSizes.get(i);
+            }
+            return argSizes;
+        } else {
+            throw new RuntimeException("No parameter size was loaded from file.");
+        }
+    }
+
     public void test(String[] args) {
 
         StringBuilder deviceInfoBuffer = new StringBuilder().append("\n");
@@ -166,14 +231,10 @@ public class TestFrontEnd {
         System.out.println(tornadoDevice.getDescription());
 
         if (args.length != 0) {
-            File file = new File(TornadoOptions.INPUT_CLASSFILE_DIR);
-            Class klass = null;
-            try {
-                klass = Class.forName(file.getName().split("\\.")[0]); //
-            } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-            byte[] sourceCode = compileMethod(klass, args[0], tornadoDevice);
+            Class klass = readClassFromFile(new File(TornadoOptions.INPUT_CLASSFILE_DIR));
+            int[] parameterSizes = readArgSizesFromFile(new File(TornadoOptions.PARAMETER_SIZE_DIR));
+
+            byte[] sourceCode = compileMethod(klass, args[0], tornadoDevice, parameterSizes);
             RuntimeUtilities.maybePrintSource(sourceCode);
         } else {
             System.out.println("Please pass the method name as parameter.");
