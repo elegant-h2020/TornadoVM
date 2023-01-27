@@ -30,10 +30,11 @@ import uk.ac.manchester.tornado.api.enums.TornadoVMBackendType;
 import uk.ac.manchester.tornado.drivers.common.ColoursTerminal;
 import uk.ac.manchester.tornado.runtime.TornadoAcceleratorDriver;
 import uk.ac.manchester.tornado.runtime.TornadoCoreRuntime;
+import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 
 /**
  * Program to query all devices reachable from TornadoVM.
- * 
+ *
  * Run as follows:
  * <p>
  * <code>
@@ -81,13 +82,19 @@ public class TornadoDeviceQuery {
             deviceInfoBuffer.append("Driver: " + colour + driver.getName() + ColoursTerminal.RESET + "\n");
             deviceInfoBuffer.append("  Total number of " + driver.getName() + " devices  : " + numDevices + "\n");
             for (int deviceIndex = 0; deviceIndex < numDevices; deviceIndex++) {
-                deviceInfoBuffer.append("  Tornado device=" + driverIndex + ":" + deviceIndex + "\n");
+                deviceInfoBuffer.append("  Tornado device=" + driverIndex + ":" + deviceIndex);
+                if (driverIndex == 0 && deviceIndex == 0) {
+                    deviceInfoBuffer.append("  (DEFAULT)");
+                }
+                deviceInfoBuffer.append("\n");
                 deviceInfoBuffer.append("\t" + colour + backendType.toString() + ColoursTerminal.RESET + " -- " + driver.getDevice(deviceIndex)).append("\n");
                 if (verboseFlag.equals("verbose")) {
                     deviceInfoBuffer.append("\t\t" + "Global Memory Size: " + formatSize(driver.getDevice(deviceIndex).getMaxGlobalMemory()) + "\n");
                     deviceInfoBuffer.append("\t\t" + "Local Memory Size: " + formatSize(driver.getDevice(deviceIndex).getDeviceLocalMemorySize()) + "\n");
                     deviceInfoBuffer.append("\t\t" + "Workgroup Dimensions: " + driver.getDevice(deviceIndex).getDeviceMaxWorkgroupDimensions().length + "\n");
-                    deviceInfoBuffer.append("\t\t" + "Total Number of Block Threads: " + driver.getDevice(deviceIndex).getPhysicalDevice().getDeviceMaxWorkGroupSize()[0] + "\n");
+                    if (!TornadoOptions.VIRTUAL_DEVICE_ENABLED) {
+                        deviceInfoBuffer.append("\t\t" + "Total Number of Block Threads: " + Arrays.toString(driver.getDevice(deviceIndex).getPhysicalDevice().getDeviceMaxWorkGroupSize()) + "\n");
+                    }
                     deviceInfoBuffer.append("\t\t" + "Max WorkGroup Configuration: " + Arrays.toString(driver.getDevice(deviceIndex).getDeviceMaxWorkgroupDimensions()) + "\n");
                     deviceInfoBuffer.append("\t\t" + "Device OpenCL C version: " + driver.getDevice(deviceIndex).getDeviceOpenCLCVersion() + "\n");
                 }

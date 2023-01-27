@@ -5,7 +5,7 @@
 
     <groupId>tornado</groupId>
     <artifactId>tornado</artifactId>
-    <version>0.15-dev</version>
+    <version>0.16-dev</version>
     <packaging>pom</packaging>
     <name>tornado</name>
     <url>https://github.com/beehive-lab/tornadovm</url>
@@ -17,7 +17,7 @@
     </scm>
 
     <properties>
-        <tornado.version>${version}</tornado.version>
+        <tornado.version>${project.version}</tornado.version>
         <graal.version>22.2.0</graal.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <classifier>${platform}</classifier>

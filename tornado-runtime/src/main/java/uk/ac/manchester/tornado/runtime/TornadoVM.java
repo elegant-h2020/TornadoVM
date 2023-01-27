@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2013-2022, APT Group, Department of Computer Science,
+ * Copyright (c) 2013-2023, APT Group, Department of Computer Science,
  * The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -42,7 +42,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import uk.ac.manchester.tornado.api.GridScheduler;
 import uk.ac.manchester.tornado.api.KernelContext;
 import uk.ac.manchester.tornado.api.WorkerGrid;
-import uk.ac.manchester.tornado.api.common.Access;
 import uk.ac.manchester.tornado.api.common.Event;
 import uk.ac.manchester.tornado.api.common.SchedulableTask;
 import uk.ac.manchester.tornado.api.common.TornadoEvents;
@@ -52,7 +51,7 @@ import uk.ac.manchester.tornado.api.exceptions.TornadoDeviceFP64NotSupported;
 import uk.ac.manchester.tornado.api.exceptions.TornadoFailureException;
 import uk.ac.manchester.tornado.api.exceptions.TornadoInternalError;
 import uk.ac.manchester.tornado.api.exceptions.TornadoRuntimeException;
-import uk.ac.manchester.tornado.api.mm.ObjectBuffer;
+import uk.ac.manchester.tornado.api.memory.ObjectBuffer;
 import uk.ac.manchester.tornado.api.profiler.ProfilerType;
 import uk.ac.manchester.tornado.api.profiler.TornadoProfiler;
 import uk.ac.manchester.tornado.runtime.common.ColoursTerminal;
@@ -129,8 +128,7 @@ public class TornadoVM extends TornadoLogger {
 
         TornadoInternalError.guarantee(buffer.get() == TornadoVMBytecode.INIT.value(), "invalid code");
 
-        contexts = new ArrayList<>();
-        contexts.addAll(graphContext.getDevices());
+        contexts = new ArrayList<>(graphContext.getDevices());
         buffer.getInt();
         int taskCount = buffer.getInt();
         callWrappers = graphContext.getCallWrappers().clone();
@@ -388,7 +386,6 @@ public class TornadoVM extends TornadoLogger {
         }
 
         final DeviceObjectState objectState = resolveObjectState(objectIndex, contextIndex);
-
         int lastEvent = device.streamOutBlocking(object, offset, objectState, waitList);
 
         resetEventIndexes(eventList);
@@ -542,8 +539,6 @@ public class TornadoVM extends TornadoLogger {
         } else {
             atomicsArray = device.checkAtomicsForTask(task);
         }
-
-        final Access[] accesses = task.getArgumentsAccess();
 
         HashMap<Integer, Integer> map = new HashMap<>();
         if (gridScheduler != null && gridScheduler.get(task.getId()) != null) {
