@@ -48,20 +48,20 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import uk.ac.manchester.tornado.api.AbstractFactoryDevice;
-import uk.ac.manchester.tornado.api.AbstractTaskGraph;
 import uk.ac.manchester.tornado.api.TornadoCI;
 import uk.ac.manchester.tornado.api.TornadoRuntimeInterface;
+import uk.ac.manchester.tornado.api.TornadoTaskGraphInterface;
 import uk.ac.manchester.tornado.api.exceptions.TornadoAPIException;
 
 public class TornadoAPIProvider {
 
-    public static AbstractTaskGraph loadScheduleRuntime(String name) {
-        AbstractTaskGraph taskGraphImpl = null;
+    public static TornadoTaskGraphInterface loadScheduleRuntime(String name) {
+        TornadoTaskGraphInterface taskGraphImpl;
         try {
             String tornadoAPIImplementation = System.getProperty("tornado.load.api.implementation");
             Class<?> klass = Class.forName(tornadoAPIImplementation);
             Constructor<?> constructor = klass.getConstructor(String.class);
-            taskGraphImpl = (AbstractTaskGraph) constructor.newInstance(name);
+            taskGraphImpl = (TornadoTaskGraphInterface) constructor.newInstance(name);
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | NoSuchMethodException | SecurityException | IllegalArgumentException | InvocationTargetException e) {
             throw new TornadoAPIException("[ERROR] Tornado API Implementation class not found", e);
         }
@@ -69,7 +69,7 @@ public class TornadoAPIProvider {
     }
 
     public static TornadoRuntimeInterface loadRuntime() {
-        TornadoRuntimeInterface runtime = null;
+        TornadoRuntimeInterface runtime;
         try {
             String tornadoRuntimeImplementation = System.getProperty("tornado.load.runtime.implementation");
             Class<?> klass = Class.forName(tornadoRuntimeImplementation);
@@ -82,7 +82,7 @@ public class TornadoAPIProvider {
     }
 
     public static TornadoCI loadTornado() {
-        TornadoCI tornado = null;
+        TornadoCI tornado;
         try {
             String tornadoImplementation = System.getProperty("tornado.load.tornado.implementation");
             Class<?> klass = Class.forName(tornadoImplementation);

@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2013-2020, APT Group, Department of Computer Science,
+ * Copyright (c) 2013-2020, 2022, APT Group, Department of Computer Science,
  * The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -48,14 +48,14 @@ import uk.ac.manchester.tornado.api.TornadoDeviceContext;
 import uk.ac.manchester.tornado.api.TornadoTargetDevice;
 import uk.ac.manchester.tornado.api.enums.TornadoDeviceType;
 import uk.ac.manchester.tornado.api.enums.TornadoVMBackendType;
-import uk.ac.manchester.tornado.api.mm.TornadoDeviceObjectState;
-import uk.ac.manchester.tornado.api.mm.TornadoMemoryProvider;
+import uk.ac.manchester.tornado.api.memory.TornadoDeviceObjectState;
+import uk.ac.manchester.tornado.api.memory.TornadoMemoryProvider;
 
 public interface TornadoDevice {
 
     /**
      * It allocates an object in the pre-defined heap of the target device. It also
-     * ensure that there is enough space for the input object.
+     * ensures that there is enough space for the input object.
      *
      * @param object
      *            to be allocated
@@ -69,7 +69,7 @@ public interface TornadoDevice {
      */
     int allocate(Object object, long batchSize, TornadoDeviceObjectState state);
 
-    int allocateBulk(Object[] objects, long batchSize, TornadoDeviceObjectState[] states);
+    int allocateObjects(Object[] objects, long batchSize, TornadoDeviceObjectState[] states);
 
     int deallocate(TornadoDeviceObjectState state);
 
@@ -178,8 +178,6 @@ public interface TornadoDevice {
     void reset();
 
     void dumpEvents();
-
-    // Getters
 
     String getDeviceName();
 
