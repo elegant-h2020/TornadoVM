@@ -1,8 +1,8 @@
 /*
- * This file is part of Tornado: A heterogeneous programming framework: 
+ * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2013-2020, APT Group, Department of Computer Science,
+ * Copyright (c) 2013-2020, 2023 APT Group, Department of Computer Science,
  * The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -20,10 +20,15 @@
  * 2 along with this work; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Authors: James Clarkson
- *
  */
 package uk.ac.manchester.tornado.drivers.opencl;
+
+import static uk.ac.manchester.tornado.runtime.common.TornadoOptions.VIRTUAL_DEVICE_ENABLED;
+
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 import uk.ac.manchester.tornado.api.TornadoTargetDevice;
 import uk.ac.manchester.tornado.api.common.Access;
@@ -36,18 +41,11 @@ import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualOCLPlatform;
 import uk.ac.manchester.tornado.drivers.opencl.virtual.VirtualOCLTornadoDevice;
 import uk.ac.manchester.tornado.runtime.common.KernelArgs;
 import uk.ac.manchester.tornado.runtime.common.DeviceObjectState;
+import uk.ac.manchester.tornado.runtime.common.KernelArgs;
 import uk.ac.manchester.tornado.runtime.common.Tornado;
 import uk.ac.manchester.tornado.runtime.common.TornadoAcceleratorDevice;
 import uk.ac.manchester.tornado.runtime.tasks.GlobalObjectState;
 import uk.ac.manchester.tornado.runtime.tasks.meta.TaskMetaData;
-
-import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-
-import static uk.ac.manchester.tornado.runtime.common.Tornado.getProperty;
-import static uk.ac.manchester.tornado.runtime.common.TornadoOptions.VIRTUAL_DEVICE_ENABLED;
 
 public class OpenCL {
 
@@ -70,7 +68,7 @@ public class OpenCL {
                 // Loading JNI OpenCL library
                 System.loadLibrary(OpenCL.OPENCL_JNI_LIBRARY);
             } catch (final UnsatisfiedLinkError e) {
-                throw e;
+                throw new TornadoRuntimeException("OpenCL JNI Library not found");
             }
 
             try {
@@ -90,11 +88,11 @@ public class OpenCL {
         }
     }
 
-    native static boolean registerCallback();
+    static native boolean registerCallback();
 
-    native static int clGetPlatformCount();
+    static native int clGetPlatformCount();
 
-    native static int clGetPlatformIDs(long[] platformIds);
+    static native int clGetPlatformIDs(long[] platformIds);
 
     public static void cleanup() {
         if (initialised) {
@@ -160,7 +158,7 @@ public class OpenCL {
 
     /**
      * Execute an OpenCL code compiled by Tornado on the target device
-     * 
+     *
      * @param tornadoDevice
      *            OpenCL device to run the application.
      * @param openCLCode
@@ -171,7 +169,7 @@ public class OpenCL {
      *            Access of each parameter
      * @param parameters
      *            List of parameters.
-     * 
+     *
      */
     public static void run(OCLTornadoDevice tornadoDevice, OCLInstalledCode openCLCode, TaskMetaData taskMeta, Access[] accesses, Object... parameters) {
         if (parameters.length != accesses.length) {
@@ -189,11 +187,11 @@ public class OpenCL {
 
             switch (access) {
                 case READ_WRITE:
-                case READ:
+                case READ_ONLY:
                     tornadoDevice.allocate(object, 0, deviceState);
                     tornadoDevice.ensurePresent(object, deviceState, null, 0, 0);
                     break;
-                case WRITE:
+                case WRITE_ONLY:
                     tornadoDevice.allocate(object, 0, deviceState);
                     break;
                 default:
@@ -223,7 +221,7 @@ public class OpenCL {
             Access access = accesses[i];
             switch (access) {
                 case READ_WRITE:
-                case WRITE:
+                case WRITE_ONLY:
                     Object object = parameters[i];
                     DeviceObjectState deviceState = states.get(i);
                     tornadoDevice.streamOutBlocking(object, 0, deviceState, null);
