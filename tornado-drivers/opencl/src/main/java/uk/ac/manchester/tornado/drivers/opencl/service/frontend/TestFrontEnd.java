@@ -27,6 +27,14 @@ package uk.ac.manchester.tornado.drivers.opencl.service.frontend;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.phases.util.Providers;
+import uk.ac.manchester.tornado.api.collections.types.VectorFloat2;
+import uk.ac.manchester.tornado.api.collections.types.VectorFloat3;
+import uk.ac.manchester.tornado.api.collections.types.VectorFloat4;
+import uk.ac.manchester.tornado.api.collections.types.VectorFloat8;
+import uk.ac.manchester.tornado.api.collections.types.VectorInt2;
+import uk.ac.manchester.tornado.api.collections.types.VectorInt3;
+import uk.ac.manchester.tornado.api.collections.types.VectorInt4;
+import uk.ac.manchester.tornado.api.collections.types.VectorInt8;
 import uk.ac.manchester.tornado.drivers.common.CompilerUtil;
 import uk.ac.manchester.tornado.drivers.opencl.OCLDriver;
 import uk.ac.manchester.tornado.drivers.opencl.OpenCL;
@@ -113,6 +121,22 @@ public class TestFrontEnd {
                 return Float.valueOf(0.0f);
             case "double":
                 return Double.valueOf(0.0f);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorInt2":
+                return new VectorInt2(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorInt3":
+                return new VectorInt3(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorInt4":
+                return new VectorInt4(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorInt8":
+                return new VectorInt8(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorFloat2":
+                return new VectorFloat2(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorFloat3":
+                return new VectorFloat3(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorFloat4":
+                return new VectorFloat4(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorFloat8":
+                return new VectorFloat8(parameterSizes[argSizesIndex++]);
             default:
                 return null;
         }
