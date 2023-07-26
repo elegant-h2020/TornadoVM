@@ -53,6 +53,7 @@ import uk.ac.manchester.tornado.drivers.opencl.graal.phases.TornadoParallelSched
 import uk.ac.manchester.tornado.drivers.opencl.graal.phases.TornadoTaskSpecialisation;
 import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
 import uk.ac.manchester.tornado.runtime.graal.compiler.TornadoHighTier;
+import uk.ac.manchester.tornado.runtime.graal.phases.TransformVectorTypesForCodeInteroperabilityMode;
 import uk.ac.manchester.tornado.runtime.graal.phases.ExceptionSuppression;
 import uk.ac.manchester.tornado.runtime.graal.phases.TornadoFieldAccessFixup;
 import uk.ac.manchester.tornado.runtime.graal.phases.TornadoFullInliningPolicy;
@@ -129,6 +130,11 @@ public class OCLHighTier extends TornadoHighTier {
         appendPhase(new TornadoOpenCLIntrinsicsReplacements(metaAccessProvider));
 
         appendPhase(new TornadoLocalMemoryAllocation());
+
+        if (TornadoOptions.CODE_INTEROPERABILITY_MODE) {
+            appendPhase(new TransformVectorTypesForCodeInteroperabilityMode());
+            appendPhase(canonicalizer);
+        }
 
         appendPhase(new ExceptionSuppression());
     }
