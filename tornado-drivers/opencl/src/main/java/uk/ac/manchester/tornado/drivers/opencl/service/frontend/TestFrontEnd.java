@@ -39,6 +39,10 @@ import uk.ac.manchester.tornado.api.collections.types.VectorInt2;
 import uk.ac.manchester.tornado.api.collections.types.VectorInt3;
 import uk.ac.manchester.tornado.api.collections.types.VectorInt4;
 import uk.ac.manchester.tornado.api.collections.types.VectorInt8;
+import uk.ac.manchester.tornado.api.exceptions.ServiceClassReflectionException;
+import uk.ac.manchester.tornado.api.exceptions.ServiceParameterFileException;
+import uk.ac.manchester.tornado.api.exceptions.ServiceTornadoCompilerException;
+import uk.ac.manchester.tornado.api.exceptions.ServiceVirtualDeviceException;
 import uk.ac.manchester.tornado.drivers.common.CompilerUtil;
 import uk.ac.manchester.tornado.drivers.opencl.OCLDriver;
 import uk.ac.manchester.tornado.drivers.opencl.OpenCL;
@@ -71,7 +75,6 @@ import java.util.StringTokenizer;
  *
  */
 public class TestFrontEnd {
-
     private static int numberOfArgsPassed;
     private static int numberOfArgsFromSignature;
     private static int argSizesIndex = 0;
@@ -87,16 +90,26 @@ public class TestFrontEnd {
                     return types;
                 }
             }
-        } catch (SecurityException | IllegalArgumentException e) {
-            throw new RuntimeException("[ERROR] Load class failed.", e);
+        } catch (SecurityException e) {
+            String message = "[TornadoVM-Service] Load class failed.";
+            printErrorMessage(message);
+            throw new ServiceClassReflectionException(message, e);
+        } catch (IllegalArgumentException e) {
+            String message = "[TornadoVM-Service] Load class failed.";
+            printErrorMessage(message);
+            throw new ServiceClassReflectionException(message, e);
         }
-        throw new RuntimeException("No method found in the class file.");
+        String message = "[TornadoVM-Service] No method found in the class file.";
+        printErrorMessage(message);
+        throw new ServiceClassReflectionException(message);
     }
 
     private void checkParameterSizes() {
         if (numberOfArgsPassed != numberOfArgsFromSignature) {
-            throw new RuntimeException(
-                    "The number of parameters passed in JSON (" + numberOfArgsPassed + ") are not the same as the number of boxed types in the method (" + numberOfArgsFromSignature + ").");
+            String message = "[TornadoVM-Service] The number of parameters passed in JSON (" + numberOfArgsPassed + ") are not the same as the number of boxed types in the method ("
+                    + numberOfArgsFromSignature + ").";
+            printErrorMessage(message);
+            throw new ServiceParameterFileException(message);
         }
     }
 
@@ -151,10 +164,10 @@ public class TestFrontEnd {
             case "uk.ac.manchester.tornado.api.collections.types.VectorDouble8":
                 return new VectorDouble8(parameterSizes[argSizesIndex++]);
             default:
-                System.err.println("[TornadoVM] - type(" + type.getTypeName() + ") is not recognized by the frontend.");
-                return null;
+                String message = "[TornadoVM-Service] - type(" + type.getTypeName() + ") is not recognized by the frontend.";
+                printErrorMessage(message);
+                throw new ServiceTornadoCompilerException(message);
         }
-
     }
 
     public byte[] compileMethod(Class<?> klass, String methodName, TornadoAcceleratorDevice tornadoDevice, int[] parameterSizes) {
@@ -179,6 +192,11 @@ public class TestFrontEnd {
         Object[] parameters = resolveParametersFromTypes(types, parameterSizes);
 
         CompilableTask compilableTask = new CompilableTask(scheduleMetaData, "t0", methodToCompile, parameters);
+        if (compilableTask == null) {
+            String message = "[TornadoVM-Service] Internal error in the TornadoVM compiler.";
+            printErrorMessage(message);
+            throw new ServiceTornadoCompilerException(message);
+        }
         TaskMetaData taskMeta = compilableTask.meta();
         taskMeta.setDevice(tornadoDevice);
 
@@ -187,21 +205,34 @@ public class TestFrontEnd {
         Providers providers = openCLBackend.getProviders();
         TornadoSuitesProvider suites = openCLBackend.getTornadoSuites();
         Sketch sketch = CompilerUtil.buildSketchForJavaMethod(resolvedJavaMethod, taskMeta, providers, suites);
+        if (sketch == null) {
+            String message = "[TornadoVM-Service] Internal error in the TornadoVM Sketcher.";
+            printErrorMessage(message);
+            throw new ServiceTornadoCompilerException(message);
+        }
 
         OCLCompilationResult compilationResult = OCLCompiler.compileSketchForDevice(sketch, compilableTask, (OCLProviders) providers, openCLBackend, new EmptyProfiler());
-
+        if (compilationResult == null) {
+            String message = "[TornadoVM-Service] Internal error in the TornadoVM compiler.";
+            printErrorMessage(message);
+            throw new ServiceTornadoCompilerException(message);
+        }
         return compilationResult.getTargetCode();
     }
 
     private Class readClassFromFile(File classFile) {
         if (!classFile.exists()) {
-            throw new RuntimeException(classFile + " does not exist.");
+            String message = "[TornadoVM-Service] " + classFile + " does not exist.";
+            printErrorMessage(message);
+            throw new ServiceClassReflectionException(message);
         }
         Class klass = null;
         try {
             klass = Class.forName(classFile.getName().split("\\.")[0]); //
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
+            String message = "[TornadoVM-Service] ClassNotFoundException - ";
+            printErrorMessage(message);
+            throw new ServiceClassReflectionException(message, e);
         }
         return klass;
     }
@@ -212,7 +243,9 @@ public class TestFrontEnd {
 
     private int[] readArgSizesFromFile(File parameterSizeFile) {
         if (!parameterSizeFile.exists()) {
-            throw new RuntimeException(parameterSizeFile + " does not exist.");
+            String message = "[TornadoVM-Service] " + parameterSizeFile + " does not exist.";
+            printErrorMessage(message);
+            throw new ServiceParameterFileException(message);
         }
         FileReader fileReader;
         BufferedReader bufferedReader;
@@ -240,7 +273,9 @@ public class TestFrontEnd {
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException("Wrong parameter size file or invalid settings.");
+            String message = "[TornadoVM-Service] Wrong parameter size file or invalid settings.";
+            printErrorMessage(message);
+            throw new ServiceParameterFileException(message);
         }
 
         if (numberOfArgsPassed > 0) {
@@ -253,20 +288,25 @@ public class TestFrontEnd {
             }
             return argSizes;
         } else {
-            throw new RuntimeException("No parameter size was loaded from file.");
+            String message = "[TornadoVM-Service] No parameter size was loaded from file.";
+            printErrorMessage(message);
+            throw new ServiceParameterFileException(message);
         }
     }
 
+    private static void printErrorMessage(String message) {
+        System.out.println(message);
+    }
+
     public void test(String[] args) {
-
-        StringBuilder deviceInfoBuffer = new StringBuilder().append("\n");
         final int numDrivers = TornadoCoreRuntime.getTornadoRuntime().getNumDrivers();
-        deviceInfoBuffer.append("Number of Tornado drivers: " + numDrivers + "\n");
-
-        System.out.println(deviceInfoBuffer.toString());
 
         VirtualOCLTornadoDevice tornadoDevice = OpenCL.getDefaultVirtualDevice();
-        System.out.println(tornadoDevice.getDescription());
+        if (tornadoDevice == null) {
+            String message = "[TornadoVM-Service] Virtual device has not been obtained.";
+            printErrorMessage(message);
+            throw new ServiceVirtualDeviceException(message);
+        }
 
         if (args.length != 0) {
             Class klass = readClassFromFile(new File(TornadoOptions.INPUT_CLASSFILE_DIR));
@@ -275,12 +315,26 @@ public class TestFrontEnd {
             byte[] sourceCode = compileMethod(klass, args[0], tornadoDevice, parameterSizes);
             RuntimeUtilities.maybePrintSource(sourceCode);
         } else {
-            System.out.println("Please pass the method name as parameter.");
+            String message = "[TornadoVM-Service] Please pass the method name as parameter.";
+            printErrorMessage(message);
+            throw new ServiceClassReflectionException(message);
         }
     }
 
     public static void main(String[] args) {
-        new TestFrontEnd().test(args);
+        try {
+            new TestFrontEnd().test(args);
+        } catch (ServiceClassReflectionException e) {
+            System.exit(3);
+        } catch (ServiceParameterFileException e) {
+            System.exit(4);
+        } catch (ServiceTornadoCompilerException e) {
+            System.exit(5);
+        } catch (ServiceVirtualDeviceException e) {
+            System.exit(6);
+        } catch (Exception e) {
+            System.exit(1);
+        }
     }
 
 }
