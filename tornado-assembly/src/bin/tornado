@@ -407,7 +407,8 @@ class TornadoVMRunnerTool():
         else:
             command = javaFlags + " " + str(args.application) + " " + params	   
         ## Execute the command
-        os.system(command)
+        var = os.WEXITSTATUS(os.system(command))
+        sys.exit(var)
        
 def parseArguments():
     """ Parse command line arguments """
