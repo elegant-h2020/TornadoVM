@@ -27,6 +27,10 @@ package uk.ac.manchester.tornado.drivers.opencl.service.frontend;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.phases.util.Providers;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble2;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble3;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble4;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble8;
 import uk.ac.manchester.tornado.api.collections.types.VectorFloat2;
 import uk.ac.manchester.tornado.api.collections.types.VectorFloat3;
 import uk.ac.manchester.tornado.api.collections.types.VectorFloat4;
@@ -91,7 +95,8 @@ public class TestFrontEnd {
 
     private void checkParameterSizes() {
         if (numberOfArgsPassed != numberOfArgsFromSignature) {
-            throw new RuntimeException("The number of parameters passed in JSON are not the same as the number of boxed types in the method.");
+            throw new RuntimeException(
+                    "The number of parameters passed in JSON (" + numberOfArgsPassed + ") are not the same as the number of boxed types in the method (" + numberOfArgsFromSignature + ").");
         }
     }
 
@@ -137,7 +142,16 @@ public class TestFrontEnd {
                 return new VectorFloat4(parameterSizes[argSizesIndex++]);
             case "uk.ac.manchester.tornado.api.collections.types.VectorFloat8":
                 return new VectorFloat8(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorDouble2":
+                return new VectorDouble2(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorDouble3":
+                return new VectorDouble3(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorDouble4":
+                return new VectorDouble4(parameterSizes[argSizesIndex++]);
+            case "uk.ac.manchester.tornado.api.collections.types.VectorDouble8":
+                return new VectorDouble8(parameterSizes[argSizesIndex++]);
             default:
+                System.err.println("[TornadoVM] - type(" + type.getTypeName() + ") is not recognized by the frontend.");
                 return null;
         }
 
