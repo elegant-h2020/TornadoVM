@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  */
-package uk.ac.manchester.tornado.examples;
+package uk.ac.manchester.tornado.examples.elegant;
 
 import uk.ac.manchester.tornado.api.ImmutableTaskGraph;
 import uk.ac.manchester.tornado.api.TaskGraph;
@@ -32,7 +32,7 @@ import uk.ac.manchester.tornado.api.enums.DataTransferMode;
  * How to run?
  * </p>
  * <code>
- *     tornado --printKernel --threadInfo --jvm="-Ds0.t0.device=0:1 -Dtornado.recover.bailout=False -Dtornado.cim.mode=True" -m tornado.examples/uk.ac.manchester.tornado.examples.NebulaStreamQuery
+ *     tornado --printKernel --threadInfo --jvm="-Ds0.t0.device=0:1 -Dtornado.recover.bailout=False -Dtornado.cim.mode=True" -m tornado.examples/uk.ac.manchester.tornado.examples.elegant.NebulaStreamQuery
  * </code>
  *
  */
