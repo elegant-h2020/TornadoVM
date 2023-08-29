@@ -358,6 +358,22 @@ public class TornadoMath {
         return (float) Math.toRadians(angdeg);
     }
 
+    public static float sinpi(float angle) {
+        return (float) Math.sin(angle * Math.PI);
+    }
+
+    public static double sinpi(double angle) {
+        return Math.sin(angle * Math.PI);
+    }
+
+    public static float cospi(float angle) {
+        return (float) Math.cos(angle * Math.PI);
+    }
+
+    public static double cospi(double angle) {
+        return Math.cos(angle * Math.PI);
+    }
+
     public static double toRadians(double angdeg) {
         return Math.toRadians(angdeg);
     }
