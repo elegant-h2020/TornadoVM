@@ -23,8 +23,10 @@ import uk.ac.manchester.tornado.api.TornadoExecutionPlan;
 import uk.ac.manchester.tornado.api.annotations.Parallel;
 import uk.ac.manchester.tornado.api.collections.math.TornadoMath;
 import uk.ac.manchester.tornado.api.collections.types.Double2;
+import uk.ac.manchester.tornado.api.collections.types.Double3;
 import uk.ac.manchester.tornado.api.collections.types.Double4;
 import uk.ac.manchester.tornado.api.collections.types.VectorDouble2;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble3;
 import uk.ac.manchester.tornado.api.collections.types.VectorDouble4;
 import uk.ac.manchester.tornado.api.enums.DataTransferMode;
 
@@ -46,8 +48,10 @@ public class KTMJavaUdfDoubleExample {
     }
 
     static class AggregationInput {
-        double aggregation_input;
-        double ABS_LEAN_ANGLE;
+        double radius;
+        double ABS_Lean_Angle;
+
+        double ABS_Front_Wheel_Speed;
     }
 
     private static final float GRAVITATION = 9.81F;
@@ -55,39 +59,49 @@ public class KTMJavaUdfDoubleExample {
     public static AggregationInput map(final CanData value) {
         AggregationInput output = new AggregationInput();
         double radians_lean = Math.toRadians(value.ABS_Lean_Angle);
-        double cotValue = Math.cos((radians_lean) / Math.sin(radians_lean));
+        double cotValue = Math.cos(radians_lean) / Math.sin(radians_lean);
         double speedValue = Math.pow(value.ABS_Front_Wheel_Speed / 3.6F, 2);
-        output.aggregation_input = Math.abs(cotValue * speedValue) / GRAVITATION;
+        output.radius = (float) (Math.abs(cotValue) * speedValue) / GRAVITATION;
+        output.ABS_Lean_Angle = Math.abs(value.ABS_Lean_Angle);
+        output.ABS_Front_Wheel_Speed = value.ABS_Front_Wheel_Speed;
         return output;
     }
 
-    public static Double2 tornadoMap(final Double4 value) {
-        Double2 output = new Double2();
+    public static Double3 tornadoMap(final Double4 value) {
+        Double3 output = new Double3();
         double radians_lean = TornadoMath.toRadians(value.getY());
-        double cotValue = TornadoMath.cos((radians_lean) / TornadoMath.sin(radians_lean));
+        double cotValue = TornadoMath.cos(radians_lean) / TornadoMath.sin(radians_lean);
         double speedValue = TornadoMath.pow(value.getW() / 3.6F, 2);
-        double aggregation_input = TornadoMath.abs(cotValue * speedValue) / GRAVITATION;
-        output.setX(aggregation_input);
+        double radius = TornadoMath.abs(cotValue * speedValue) / GRAVITATION;
+        output.setX(radius);
+        output.setY(TornadoMath.abs(value.getY()));
+        output.setZ(value.getW());
         return output;
     }
 
-    public static void map(VectorDouble4 value, VectorDouble2 output) {
+    public static void map(VectorDouble4 value, VectorDouble3 output) {
         for (@Parallel int i = 0; i < output.getLength(); i++) {
             output.set(i, tornadoMap(value.get(i)));
         }
     }
 
-    public static boolean validate(AggregationInput[] resultJava, VectorDouble2 resultTornado) {
+    public static boolean validate(AggregationInput[] resultJava, VectorDouble3 resultTornado) {
         boolean valid = true;
 
         for (int i = 0; i < resultJava.length; i++) {
-            if (Math.abs(resultJava[i].aggregation_input - resultTornado.get(i).getX()) > 0.1) {
-                System.out.println("Java resultJava[" + i + "].aggregation_input: " + resultJava[i].aggregation_input + " vs Tornado result (" + i + ").getX(): " + resultTornado.get(i).getX() + "\n");
+            if (Math.abs(resultJava[i].radius - resultTornado.get(i).getX()) > 0.1) {
+                System.out.println("Java resultJava[" + i + "].radius: " + resultJava[i].radius + " vs Tornado result (" + i + ").getX(): " + resultTornado.get(i).getX() + "\n");
                 valid = false;
                 break;
             }
-            if (Math.abs(resultJava[i].ABS_LEAN_ANGLE - resultTornado.get(i).getY()) > 0.1) {
-                System.out.println("Java resultJava[" + i + "].ABS_LEAN_ANGLE: " + resultJava[i].ABS_LEAN_ANGLE + " vs Tornado result (" + i + ").getY(): " + resultTornado.get(i).getY() + "\n");
+            if (Math.abs(resultJava[i].ABS_Lean_Angle - resultTornado.get(i).getY()) > 0.1) {
+                System.out.println("Java resultJava[" + i + "].ABS_LEAN_ANGLE: " + resultJava[i].ABS_Lean_Angle + " vs Tornado result (" + i + ").getY(): " + resultTornado.get(i).getY() + "\n");
+                valid = false;
+                break;
+            }
+            if (Math.abs(resultJava[i].ABS_Front_Wheel_Speed - resultTornado.get(i).getZ()) > 0.1) {
+                System.out.println(
+                        "Java resultJava[" + i + "].ABS_Front_Wheel_Speed: " + resultJava[i].ABS_Front_Wheel_Speed + " vs Tornado result (" + i + ").getZ(): " + resultTornado.get(i).getZ() + "\n");
                 valid = false;
                 break;
             }
@@ -107,7 +121,7 @@ public class KTMJavaUdfDoubleExample {
         long end,start;
 
         VectorDouble4 input = new VectorDouble4(size);
-        VectorDouble2 resultTornado = new VectorDouble2(size);
+        VectorDouble3 resultTornado = new VectorDouble3(size);
         CanData[] inputJava = new CanData[size];
         AggregationInput[] resultJava = new AggregationInput[size];
 

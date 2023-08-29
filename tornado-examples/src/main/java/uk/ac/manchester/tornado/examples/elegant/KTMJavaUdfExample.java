@@ -20,11 +20,16 @@ package uk.ac.manchester.tornado.examples.elegant;
 import uk.ac.manchester.tornado.api.ImmutableTaskGraph;
 import uk.ac.manchester.tornado.api.TaskGraph;
 import uk.ac.manchester.tornado.api.TornadoExecutionPlan;
+import uk.ac.manchester.tornado.api.TornadoExecutionResult;
 import uk.ac.manchester.tornado.api.annotations.Parallel;
 import uk.ac.manchester.tornado.api.collections.math.TornadoMath;
-import uk.ac.manchester.tornado.api.collections.types.Float2;
+import uk.ac.manchester.tornado.api.collections.types.Double3;
+import uk.ac.manchester.tornado.api.collections.types.Double4;
+import uk.ac.manchester.tornado.api.collections.types.Float3;
 import uk.ac.manchester.tornado.api.collections.types.Float4;
-import uk.ac.manchester.tornado.api.collections.types.VectorFloat2;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble3;
+import uk.ac.manchester.tornado.api.collections.types.VectorDouble4;
+import uk.ac.manchester.tornado.api.collections.types.VectorFloat3;
 import uk.ac.manchester.tornado.api.collections.types.VectorFloat4;
 import uk.ac.manchester.tornado.api.enums.DataTransferMode;
 
@@ -46,8 +51,10 @@ public class KTMJavaUdfExample {
     }
 
     static class AggregationInput {
-        float aggregation_input;
-        float ABS_LEAN_ANGLE;
+        float radius;
+        float ABS_Lean_Angle;
+
+        float ABS_Front_Wheel_Speed;
     }
 
     private static final float GRAVITATION = 9.81F;
@@ -55,39 +62,49 @@ public class KTMJavaUdfExample {
     public static AggregationInput map(final CanData value) {
         AggregationInput output = new AggregationInput();
         float radians_lean = (float) Math.toRadians(value.ABS_Lean_Angle);
-        float cotValue = (float) Math.cos((radians_lean) / Math.sin(radians_lean));
+        float cotValue = (float) (Math.cos(radians_lean) / Math.sin(radians_lean));
         float speedValue = (float) Math.pow(value.ABS_Front_Wheel_Speed / 3.6F, 2);
-        output.aggregation_input = Math.abs(cotValue * speedValue) / GRAVITATION;
+        output.radius = (Math.abs(cotValue) * speedValue) / GRAVITATION;
+        output.ABS_Lean_Angle = Math.abs(value.ABS_Lean_Angle);
+        output.ABS_Front_Wheel_Speed = value.ABS_Front_Wheel_Speed;
         return output;
     }
 
-    public static Float2 tornadoMap(final Float4 value) {
-        Float2 output = new Float2();
+    public static Float3 tornadoMap(final Float4 value) {
+        Float3 output = new Float3();
         float radians_lean = TornadoMath.toRadians(value.getY());
-        float cotValue = TornadoMath.cos((radians_lean) / TornadoMath.sin(radians_lean));
+        float cotValue = TornadoMath.cos(radians_lean) / TornadoMath.sin(radians_lean);
         float speedValue = TornadoMath.pow(value.getW() / 3.6F, 2);
-        float aggregation_input = TornadoMath.abs(cotValue * speedValue) / GRAVITATION;
-        output.setX(aggregation_input);
+        float radius = TornadoMath.abs(cotValue * speedValue) / GRAVITATION;
+        output.setX(radius);
+        output.setY(TornadoMath.abs(value.getY()));
+        output.setZ(value.getW());
         return output;
     }
 
-    public static void map(VectorFloat4 value, VectorFloat2 output) {
+    public static void map(VectorFloat4 value, VectorFloat3 output) {
         for (@Parallel int i = 0; i < output.getLength(); i++) {
             output.set(i, tornadoMap(value.get(i)));
         }
     }
 
-    public static boolean validate(AggregationInput[] resultJava, VectorFloat2 resultTornado) {
+    public static boolean validate(AggregationInput[] resultJava, VectorFloat3 resultTornado) {
         boolean valid = true;
 
         for (int i = 0; i < resultJava.length; i++) {
-            if (Math.abs(resultJava[i].aggregation_input - resultTornado.get(i).getX()) > 0.1) {
-                System.out.println("Java resultJava[" + i + "].aggregation_input: " + resultJava[i].aggregation_input + " vs Tornado result (" + i + ").getX(): " + resultTornado.get(i).getX() + "\n");
+            if (Math.abs(resultJava[i].radius - resultTornado.get(i).getX()) > 0.1) {
+                System.out.println("Java resultJava[" + i + "].radius: " + resultJava[i].radius + " vs Tornado result (" + i + ").getX(): " + resultTornado.get(i).getX() + "\n");
                 valid = false;
                 break;
             }
-            if (Math.abs(resultJava[i].ABS_LEAN_ANGLE - resultTornado.get(i).getY()) > 0.1) {
-                System.out.println("Java resultJava[" + i + "].ABS_LEAN_ANGLE: " + resultJava[i].ABS_LEAN_ANGLE + " vs Tornado result (" + i + ").getY(): " + resultTornado.get(i).getY() + "\n");
+            if (Math.abs(resultJava[i].ABS_Lean_Angle - resultTornado.get(i).getY()) > 0.1) {
+                System.out.println("Java resultJava[" + i + "].ABS_Lean_Angle: " + resultJava[i].ABS_Lean_Angle + " vs Tornado result (" + i + ").getY(): " + resultTornado.get(i).getY() + "\n");
+                valid = false;
+                break;
+            }
+            if (Math.abs(resultJava[i].ABS_Front_Wheel_Speed - resultTornado.get(i).getZ()) > 0.1) {
+                System.out.println(
+                        "Java resultJava[" + i + "].ABS_Front_Wheel_Speed: " + resultJava[i].ABS_Front_Wheel_Speed + " vs Tornado result (" + i + ").getZ(): " + resultTornado.get(i).getZ() + "\n");
                 valid = false;
                 break;
             }
@@ -107,7 +124,7 @@ public class KTMJavaUdfExample {
         long end,start;
 
         VectorFloat4 input = new VectorFloat4(size);
-        VectorFloat2 resultTornado = new VectorFloat2(size);
+        VectorFloat3 resultTornado = new VectorFloat3(size);
         CanData[] inputJava = new CanData[size];
         AggregationInput[] resultJava = new AggregationInput[size];
 
@@ -141,9 +158,10 @@ public class KTMJavaUdfExample {
             switch (executionType) {
                 case "tornado":
                     start = System.nanoTime();
-                    executionPlan.execute();
+                    TornadoExecutionResult executionResult = executionPlan.execute();
                     end = System.nanoTime();
                     System.out.println("Total time of " + executionType + ":  " + (end - start) + " ns" + " \n");
+                    System.out.println("The data transfers time is: " + executionResult.getProfilerResult().getDataTransfersTime());
                     break;
                 case "sequential":
                     start = System.nanoTime();
