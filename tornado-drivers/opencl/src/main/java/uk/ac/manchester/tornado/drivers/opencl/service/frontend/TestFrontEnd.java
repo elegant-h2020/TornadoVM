@@ -2,7 +2,7 @@
  * This file is part of Tornado: A heterogeneous programming framework:
  * https://github.com/beehive-lab/tornadovm
  *
- * Copyright (c) 2013-2022, APT Group, Department of Computer Science,
+ * Copyright (c) 2013-2023, APT Group, Department of Computer Science,
  * The University of Manchester. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -228,11 +228,27 @@ public class TestFrontEnd {
         }
         Class klass = null;
         try {
-            klass = Class.forName(classFile.getName().split("\\.")[0]); //
+            klass = Class.forName(classFile.getName().split("\\.")[0]);
         } catch (ClassNotFoundException e) {
-            String message = "[TornadoVM-Service] ClassNotFoundException - ";
+            String message = "[TornadoVM-Service] ClassNotFoundException for classname: " + classFile.getName().split("\\.")[0];
             printErrorMessage(message);
             throw new ServiceClassReflectionException(message, e);
+        } catch (NoClassDefFoundError e) {
+            e.printStackTrace();
+        }
+        return klass;
+    }
+
+    private Class readClassFromName(String className) {
+        Class klass = null;
+        try {
+            klass = Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            String message = "[TornadoVM-Service] ClassNotFoundException for className: " + className;
+            printErrorMessage(message);
+            throw new ServiceClassReflectionException(message, e);
+        } catch (NoClassDefFoundError e) {
+            e.printStackTrace();
         }
         return klass;
     }
@@ -309,7 +325,12 @@ public class TestFrontEnd {
         }
 
         if (args.length != 0) {
-            Class klass = readClassFromFile(new File(TornadoOptions.INPUT_CLASSFILE_DIR));
+            Class klass = null;
+            if (TornadoOptions.INPUT_CLASSNAME != null) {
+                klass = readClassFromName(TornadoOptions.INPUT_CLASSNAME);
+            } else if (TornadoOptions.INPUT_CLASSFILE_DIR != null) {
+                klass = readClassFromFile(new File(TornadoOptions.INPUT_CLASSFILE_DIR));
+            }
             int[] parameterSizes = readArgSizesFromFile(new File(TornadoOptions.PARAMETER_SIZE_DIR));
 
             byte[] sourceCode = compileMethod(klass, args[0], tornadoDevice, parameterSizes);
